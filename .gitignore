@@ -67,3 +67,7 @@ nestjs-explore-with-ec2-pujon2.pem
 *.crt
 
 docs
+
+.agents
+.codex
+.qodo

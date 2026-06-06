@@ -13,14 +13,11 @@ import {
  * Translates Prisma-specific error codes into domain exceptions.
  * This ensures that infrastructure errors never leak into the domain layer.
  *
- * MongoDB Prisma Error Codes Reference:
+ * Prisma Error Codes Reference:
  * - P2002: Unique constraint violation
  * - P2025: Record not found (update/delete on missing record)
  * - P2028: Transaction API error
- * - P2023: Inconsistent column data (e.g., invalid ObjectId)
- *
- * Edge Case: MongoDB's P2002 error includes the constraint name in
- * `error.meta.target` as an array of field names.
+ * - P2023: Inconsistent column data
  */
 export class PrismaErrorMapper {
   /**
@@ -93,11 +90,10 @@ export class PrismaErrorMapper {
       }
 
       case 'P2023': {
-        // Invalid ObjectId format
         return new DomainException(
-          `Invalid ID format for ${entityName}. Expected a valid MongoDB ObjectId.`,
+          `Invalid data format for ${entityName}.`,
           DomainErrorCategory.VALIDATION,
-          'INVALID_ID_FORMAT',
+          'INVALID_DATA_FORMAT',
         );
       }
 

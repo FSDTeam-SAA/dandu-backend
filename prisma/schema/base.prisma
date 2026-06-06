@@ -1,4 +1,4 @@
-// Prisma schema for MongoDB
+// Prisma schema for MySQL
 // Connection URL is configured in prisma.config.ts (CLI) and PrismaClient constructor (runtime)
 
 generator client {
@@ -7,6 +7,6 @@ generator client {
 }
 
 datasource db {
-    provider = "mongodb"
+    provider = "mysql"
     url      = env("DATABASE_URL")
 }

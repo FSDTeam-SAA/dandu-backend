@@ -3,11 +3,11 @@
 // ================================
 
 model ActivityLogEvent {
-    id         String     @id @default(auto()) @map("_id") @db.ObjectId
+    id         String     @id @default(uuid()) @db.VarChar(36)
     tableName  String
     recordId   String
     action     ActionType
-    actionedBy String?    @db.ObjectId // user id who did the action
+    actionedBy String?    @db.VarChar(36) // user id who did the action
     ipAddress  String?
     userAgent  String?
     device     String?
@@ -28,8 +28,8 @@ model ActivityLogEvent {
 // ================================
 
 model ActivityLogEventDetail {
-    id        String  @id @default(auto()) @map("_id") @db.ObjectId
-    eventId   String  @db.ObjectId
+    id        String  @id @default(uuid()) @db.VarChar(36)
+    eventId   String  @db.VarChar(36)
     fieldName String
     oldValue  String?
     newValue  String?

@@ -3,7 +3,7 @@
 // ================================
 
 model AuthUser {
-    id           String     @id @default(auto()) @map("_id") @db.ObjectId
+    id           String     @id @default(uuid()) @db.VarChar(36)
     email        String     @unique
     password     String
     username     String     @unique
@@ -26,7 +26,7 @@ model AuthUser {
     subscriptions     Subscription[]
     jobs              Job[]
 
-    // MongoDB: @unique already creates an index, so don't duplicate with @@index
+    // @unique already creates indexes, so don't duplicate them with @@index
     // Compound index for lookups by email+id+providerId
     @@index([email, providerId])
 }
@@ -36,8 +36,8 @@ model AuthUser {
 // ================================
 
 model AuthSecurity {
-    id                 String     @id @default(auto()) @map("_id") @db.ObjectId
-    authId             String     @unique @db.ObjectId
+    id                 String     @id @default(uuid()) @db.VarChar(36)
+    authId             String     @unique @db.VarChar(36)
     failedAttempts     Int        @default(0)
     lastFailedAt       DateTime?
     lockExpiresAt      DateTime?

@@ -16,12 +16,7 @@ import { JobMapper } from './mappers/job.mapper';
 /**
  * Prisma Job Repository (Adapter)
  *
- * Implements IJobRepository using Prisma Client with MongoDB.
- *
- * MongoDB-specific edge cases handled:
- * 1. No `mode: 'insensitive'` — uses regex-based case-insensitive search
- * 2. groupBy with _count uses { _all: true } syntax
- * 3. ObjectId validation via PrismaErrorMapper (P2023)
+ * Implements IJobRepository using Prisma Client with MySQL.
  */
 @Injectable()
 export class PrismaJobRepository implements IJobRepository {
@@ -71,23 +66,13 @@ export class PrismaJobRepository implements IJobRepository {
       deletedAt: null,
     };
 
-    // =========================================================
-    // MongoDB Edge Case: case-insensitive search
-    // Prisma's MongoDB connector does NOT support `mode: 'insensitive'`.
-    // We use `contains` which is case-SENSITIVE on MongoDB by default.
-    // For case-insensitive search, we use string matching without mode.
-    //
-    // Note: For production MongoDB deployments needing case-insensitive
-    // search, consider creating a case-insensitive collation index:
-    // db.Job.createIndex({ company: 1 }, { collation: { locale: "en", strength: 2 } })
-    // =========================================================
     if (search) {
       where.OR = [
         { company: { contains: search } },
         { role: { contains: search } },
         { location: { contains: search } },
-        { techStack: { hasSome: [search] } },
-        { tags: { hasSome: [search] } },
+        { techStack: { array_contains: [search] } },
+        { tags: { array_contains: [search] } },
       ];
     }
 
@@ -161,11 +146,11 @@ export class PrismaJobRepository implements IJobRepository {
 
     // Array filters
     if (tags && tags.length > 0) {
-      where.tags = { hasSome: tags };
+      where.tags = { array_contains: tags };
     }
 
     if (techStack && techStack.length > 0) {
-      where.techStack = { hasSome: techStack };
+      where.techStack = { array_contains: techStack };
     }
 
     if (company) {

@@ -9,10 +9,7 @@
  * → Enables testing with in-memory implementations.
  * → Allows swapping Prisma for another ORM without changing services.
  *
- * Edge Case (MongoDB):
- * MongoDB transactions require a replica set. In development, ensure
- * your local MongoDB is configured with --replSet.
- * Atlas provides replica sets by default.
+ * Coordinates multiple repository writes in one database transaction.
  *
  * Usage:
  * ```typescript

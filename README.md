@@ -2,10 +2,10 @@
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
 </p>
 
-<h1 align="center">NestJS + Prisma + MongoDB Starter Template</h1>
+<h1 align="center">NestJS + Prisma + MySQL Starter Template</h1>
 
 <p align="center">
-  A production-ready, enterprise-grade starter template for building scalable backend applications with NestJS, Prisma ORM, and MongoDB.
+  A production-ready, enterprise-grade starter template for building scalable backend applications with NestJS, Prisma ORM, and MySQL.
 </p>
 
 <p align="center">
@@ -71,19 +71,19 @@ Get up and running in 5 minutes:
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/the-pujon/nestjs-prisma-mongodb-hexagon.git
-cd nestjs-prisma-mongodb-hexagon
+git clone https://github.com/the-pujon/nestjs-prisma-mysql-hexagon.git
+cd nestjs-prisma-mysql-hexagon
 
 # 2. Create environment file
 cp .env.example .env
 
-# 3. Start Docker services (MongoDB, Redis, Prometheus, Grafana, Loki)
+# 3. Start Docker services (MySQL, Redis, Prometheus, Grafana, Loki)
 docker compose up -d
 
 # 4. Install dependencies
 npm install
 
-# 5. Push Prisma schema to MongoDB
+# 5. Push Prisma schema to MySQL
 npx prisma db push
 
 # 6. Start the development server
@@ -93,7 +93,7 @@ npm run start:dev
 **Verify installation:**
 - API Health: http://localhost:5000
 - API Docs: Import `postman-collection.json` into Postman
-- Mongo Express: http://localhost:8081
+- MySQL: `127.0.0.1:3306`
 - RedisInsight: http://localhost:8001
 - Grafana: http://localhost:3000 (admin / admin)
 - Prometheus: http://localhost:9090
@@ -127,7 +127,7 @@ npm run start:dev
 - **Secure Callback Handling** - State validation and token exchange
 
 ### 📦 Infrastructure
-- **MongoDB 7** with Prisma ORM (modular schema)
+- **MySQL 8.4** with Prisma ORM (modular schema)
 - **Redis Stack** for caching, sessions, and distributed locks
 - **BullMQ** for background job processing (emails, notifications)
 - **Docker Compose** for local development
@@ -157,7 +157,7 @@ npm run start:dev
 | **Framework** | NestJS 11 |
 | **Language** | TypeScript 5.7 |
 | **ORM** | Prisma 7 |
-| **Database** | MongoDB 7 |
+| **Database** | MySQL 8.4 |
 | **Cache/Queue** | Redis Stack (with RedisInsight UI) |
 | **Job Queue** | BullMQ |
 | **Auth** | JWT (jsonwebtoken) |
@@ -183,7 +183,7 @@ sequenceDiagram
     participant C as Client
     participant A as Auth API
     participant R as Redis
-    participant DB as MongoDB
+    participant DB as MySQL
     participant Q as BullMQ
 
     C->>A: POST /auth/signup
@@ -213,7 +213,7 @@ sequenceDiagram
     participant C as Client
     participant A as Auth API
     participant R as Redis
-    participant DB as MongoDB
+    participant DB as MySQL
 
     C->>A: POST /auth/login
     A->>R: Check rate limit (email + IP)
@@ -244,7 +244,7 @@ sequenceDiagram
     participant C as Client
     participant A as Auth API
     participant R as Redis
-    participant DB as MongoDB
+    participant DB as MySQL
 
     C->>A: POST /auth/refresh
     A->>A: Verify refresh token signature
@@ -274,7 +274,7 @@ sequenceDiagram
     participant A as Auth API
     participant G as Google OAuth
     participant R as Redis
-    participant DB as MongoDB
+    participant DB as MySQL
 
     C->>A: GET /auth/google?redirectUrl=...
     A->>A: Generate state token (CSRF protection)
@@ -310,7 +310,7 @@ sequenceDiagram
     participant C as Client
     participant G as AuthGuard
     participant R as Redis
-    participant DB as MongoDB
+    participant DB as MySQL
     participant Ctrl as Controller
 
     C->>G: Request with Authorization
@@ -620,11 +620,10 @@ enum billingInterval {
 }
 ```
 
-### Syncing the MongoDB Schema
+### Syncing the MySQL Schema
 
 ```bash
-# MongoDB does not use Prisma migrations.
-# Push schema changes directly to the database.
+# Push schema changes directly to the database for local development.
 npx prisma db push
 
 # Generate Prisma Client
@@ -637,7 +636,7 @@ npx prisma generate
 ## 📁 Project Structure
 
 ```
-nestjs-prisma-mongodb-hexagon/
+nestjs-prisma-mysql-hexagon/
 ├── 📂 src/
 │   ├── 📂 auth/                    # Authentication module
 │   │   ├── 📂 config/              # Auth configuration (timeouts, limits)
@@ -682,7 +681,7 @@ nestjs-prisma-mongodb-hexagon/
 │   │   ├── history.prisma          # LoginHistory, EmailHistory
 │   │   ├── activityLog.prisma      # Activity logging
 │   │   └── subscription.prisma     # Subscription, Payment, Invoice
-│   └── No migrations directory     # MongoDB uses prisma db push
+│   └── 📂 migrations/               # MySQL migrations can be added with prisma migrate
 │
 ├── 📂 monitoring/
 │   ├── 📂 prometheus/              # Prometheus config
@@ -716,8 +715,8 @@ nestjs-prisma-mongodb-hexagon/
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/the-pujon/nestjs-prisma-mongodb-hexagon.git
-   cd nestjs-prisma-mongodb-hexagon
+   git clone https://github.com/the-pujon/nestjs-prisma-mysql-hexagon.git
+   cd nestjs-prisma-mysql-hexagon
    ```
 
 2. **Create environment file**
@@ -729,7 +728,7 @@ nestjs-prisma-mongodb-hexagon/
 
 4. **Start Docker services**
    ```bash
-   # Start all services (MongoDB, Redis, Prometheus, Grafana, Loki)
+   # Start all services (MySQL, Redis, Prometheus, Grafana, Loki)
    docker compose up -d
    ```
 
@@ -738,7 +737,7 @@ nestjs-prisma-mongodb-hexagon/
    npm install
    ```
 
-6. **Push Prisma schema to MongoDB**
+6. **Push Prisma schema to MySQL**
    ```bash
    npx prisma db push
    ```
@@ -778,12 +777,12 @@ nestjs-prisma-mongodb-hexagon/
 | Command | Description |
 |---------|-------------|
 | `npx prisma generate` | Generate Prisma Client |
-| `npx prisma db push` | Push schema changes to MongoDB |
+| `npx prisma db push` | Push schema changes to MySQL |
 | `npx prisma studio` | Open Prisma Studio GUI |
 
 8. **Verify installation**
    - API: http://localhost:5000
-   - Mongo Express: http://localhost:8081
+   - MySQL: `127.0.0.1:3306`
    - RedisInsight: http://localhost:8001
    - Prometheus: http://localhost:9090
    - Grafana: http://localhost:3000
@@ -818,9 +817,9 @@ For detailed information, see [docs/SWAGGER.md](docs/SWAGGER.md)
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | **Database** |
-| `DATABASE_URL` | ✅ | - | MongoDB connection string |
-| `DATABASE_PORT` | ❌ | `27017` | MongoDB port mapping |
-| `DATABASE_HOST` | ❌ | `127.0.0.1` | MongoDB host |
+| `DATABASE_URL` | ✅ | - | MySQL connection string |
+| `DATABASE_PORT` | ❌ | `3306` | MySQL port mapping |
+| `DATABASE_HOST` | ❌ | `127.0.0.1` | MySQL host |
 | **Application** |
 | `NODE_ENV` | ❌ | `development` | Environment: `development`, `production`, `test` |
 | `PORT` | ❌ | `5000` | Application port |
@@ -859,8 +858,8 @@ Create a `.env` file based on `.env.example`:
 # ═══════════════════════════════════════════════════════════════
 # DATABASE CONFIGURATION
 # ═══════════════════════════════════════════════════════════════
-DATABASE_URL=mongodb://127.0.0.1:27017/job_tracker?replicaSet=rs0&directConnection=true
-DATABASE_PORT=27017
+DATABASE_URL=mysql://dandu:dandu@127.0.0.1:3306/job_tracker
+DATABASE_PORT=3306
 DATABASE_HOST=127.0.0.1
 
 # ═══════════════════════════════════════════════════════════════
@@ -2202,13 +2201,13 @@ try {
 docker compose up -d
 
 # Start specific services only
-docker compose up -d mongodb redis-stack
+docker compose up -d mysql redis-stack
 
 # View logs
 docker compose logs -f
 
 # View logs for specific service
-docker compose logs -f mongodb
+docker compose logs -f mysql
 
 # Stop services
 docker compose down
@@ -2224,8 +2223,7 @@ docker compose up -d --build
 
 | Service | Port(s) | URL | Description |
 |---------|---------|-----|-------------|
-| `mongodb` | 27017 | - | MongoDB 7 database with single-node replica set |
-| `mongo-express` | 8081 | http://localhost:8081 | MongoDB admin web interface |
+| `mysql` | 3306 | - | MySQL 8.4 database |
 | `redis-stack` | 6379, 8001 | http://localhost:8001 | Redis Stack with RedisInsight |
 | `prometheus` | 9090 | http://localhost:9090 | Metrics collection |
 | `grafana` | 3000 | http://localhost:3000 | Visualization dashboards |
@@ -2235,15 +2233,15 @@ docker compose up -d --build
 
 | Service | Username | Password |
 |---------|----------|----------|
-| Mongo Express | No basic auth in local compose | No basic auth in local compose |
+| MySQL | `dandu` | `dandu` |
 | Grafana | `admin` | `admin` |
 | Redis | `default` | (no password by default) |
 
-### Connecting to MongoDB via Mongo Express
+### Connecting to MySQL
 
-1. Open http://localhost:8081
-2. Use the `job_tracker` database
-3. Local container connection string: `mongodb://mongodb:27017/job_tracker?replicaSet=rs0&directConnection=true`
+1. Use any MySQL client.
+2. Host: `127.0.0.1`, port: `3306`, database: `job_tracker`.
+3. Local connection string: `mysql://dandu:dandu@127.0.0.1:3306/job_tracker`.
 
 ### RedisInsight Usage
 
@@ -2628,7 +2626,7 @@ scp docker-compose.yaml docker-compose.prod.yaml ec2-user@server:/home/ec2-user/
 docker-compose -f docker-compose.yaml -f docker-compose.prod.yaml pull
 docker-compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d
 
-# Push schema changes to MongoDB
+# Push schema changes to MySQL
 docker exec -it simple_blog_backend npx prisma db push
 ```
 
@@ -2642,18 +2640,18 @@ docker exec -it simple_blog_backend npx prisma db push
 
 #### 1. Database Connection Failed
 
-**Error:** `Can't reach database server at localhost:27017`
+**Error:** `Can't reach database server at localhost:3306`
 
 **Solutions:**
 ```bash
-# Check if MongoDB is running
-docker ps | grep mongodb
+# Check if MySQL is running
+docker ps | grep mysql
 
-# Restart MongoDB
-docker compose restart mongodb
+# Restart MySQL
+docker compose restart mysql
 
 # Check DATABASE_URL in .env matches docker-compose ports
-# Default: mongodb://127.0.0.1:27017/job_tracker?replicaSet=rs0&directConnection=true
+# Default: mysql://dandu:dandu@127.0.0.1:3306/job_tracker
 ```
 
 #### 2. Redis Connection Failed
@@ -2752,7 +2750,7 @@ npm install
 # Docker Desktop > Settings > Resources > Memory: 4GB+
 
 # Or reduce services
-docker compose up -d mongodb redis-stack
+docker compose up -d mysql redis-stack
 # Start monitoring stack later
 docker compose up -d prometheus grafana loki
 ```
@@ -2773,7 +2771,7 @@ Check logs:
 npm run start:dev
 
 # Docker service logs
-docker compose logs -f mongodb
+docker compose logs -f mysql
 docker compose logs -f redis-stack
 
 # All logs
@@ -2789,7 +2787,7 @@ docker compose logs -f
 
 ### Getting Help
 
-1. **Check existing issues:** [GitHub Issues](https://github.com/the-pujon/nestjs-prisma-mongodb-hexagon/issues)
+1. **Check existing issues:** [GitHub Issues](https://github.com/the-pujon/nestjs-prisma-mysql-hexagon/issues)
 2. **Read detailed docs:** Check the `docs/` folder
 3. **Open new issue:** Include error logs and steps to reproduce
 
@@ -2822,7 +2820,7 @@ This project is [MIT licensed](LICENSE).
 
 - [NestJS](https://nestjs.com/) - The progressive Node.js framework
 - [Prisma](https://www.prisma.io/) - Next-generation ORM
-- [MongoDB](https://www.mongodb.com/) - Document database used by this starter
+- [MySQL](https://www.mysql.com/) - Document database used by this starter
 - [Redis](https://redis.io/) - In-memory data structure store
 - [BullMQ](https://docs.bullmq.io/) - Premium message queue for Node.js
 - [Prometheus](https://prometheus.io/) - Monitoring system and time series database
@@ -2844,7 +2842,7 @@ This project is [MIT licensed](LICENSE).
 <p align="center">Made with ❤️ by <a href="https://github.com/the-pujon">Pujon Das Auvi</a></p>
 
 <p align="center">
-  <a href="https://github.com/the-pujon/nestjs-prisma-mongodb-hexagon">⭐ Star this repo</a> •
-  <a href="https://github.com/the-pujon/nestjs-prisma-mongodb-hexagon/issues">🐛 Report Bug</a> •
-  <a href="https://github.com/the-pujon/nestjs-prisma-mongodb-hexagon/issues">✨ Request Feature</a>
+  <a href="https://github.com/the-pujon/nestjs-prisma-mysql-hexagon">⭐ Star this repo</a> •
+  <a href="https://github.com/the-pujon/nestjs-prisma-mysql-hexagon/issues">🐛 Report Bug</a> •
+  <a href="https://github.com/the-pujon/nestjs-prisma-mysql-hexagon/issues">✨ Request Feature</a>
 </p>

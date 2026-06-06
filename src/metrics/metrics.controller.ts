@@ -1,4 +1,4 @@
-import { Controller, Get, Header } from '@nestjs/common';
+import { Controller, Get, Header, VERSION_NEUTRAL, Version } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 import { MetricsService } from './metrics.service';
@@ -10,6 +10,7 @@ export class MetricsController {
   constructor(private readonly metricsService: MetricsService) {}
 
   @ApiExcludeEndpoint() // Exclude from Swagger as it returns Prometheus format
+  @Version(VERSION_NEUTRAL)
   @Get('metrics')
   @Header('Content-Type', 'text/plain; version=0.0.4')
   async getMetrics(): Promise<string> {
@@ -17,6 +18,7 @@ export class MetricsController {
   }
 
   @ApiOperation({ summary: 'Get metrics in JSON format' })
+  @Version(VERSION_NEUTRAL)
   @Get('metrics/json')
   async getMetricsJSON(): Promise<any> {
     return this.metricsService.getMetricsJSON();

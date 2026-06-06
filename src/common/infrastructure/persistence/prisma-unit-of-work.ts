@@ -24,10 +24,9 @@ export class PrismaTransactionContext implements ITransactionContext {
  *
  * Implements the IUnitOfWork port using Prisma's interactive transactions.
  *
- * MongoDB Edge Cases:
- * - Transactions require a MongoDB replica set (Atlas has this by default).
- * - Transaction timeout is set to 10s (MongoDB default is 60s but we fail fast).
- * - maxWait is 5s — how long to wait for a connection from the pool.
+ * Transaction options:
+ * - timeout is 10s so long-running transactions fail fast.
+ * - maxWait is 5s: how long to wait for a connection from the pool.
  *
  * Usage in services:
  * ```typescript

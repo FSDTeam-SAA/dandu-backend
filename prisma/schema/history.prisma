@@ -3,8 +3,8 @@
 // ================================
 
 model LoginHistory {
-    id            String      @id @default(auto()) @map("_id") @db.ObjectId
-    authId        String      @db.ObjectId
+    id            String      @id @default(uuid()) @db.VarChar(36)
+    authId        String      @db.VarChar(36)
     ipAddress     String
     userAgent     String
     device_id     String?
@@ -29,8 +29,8 @@ model LoginHistory {
 // ================================
 
 model EmailHistory {
-    id            String          @id @default(auto()) @map("_id") @db.ObjectId
-    authId        String          @db.ObjectId
+    id            String          @id @default(uuid()) @db.VarChar(36)
+    authId        String          @db.VarChar(36)
     emailTo       String
     emailType     EmailType
     subject       String

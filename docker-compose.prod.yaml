@@ -11,9 +11,9 @@ services:
       - "5000:5000"
     environment:
       DATABASE_URL: ${DATABASE_URL}
-      DATABASE_HOST: mongodb
-      DATABASE_PORT: 27017
-      DATABASE_NAME: job_tracker
+      DATABASE_HOST: ${DATABASE_HOST:-mysql}
+      DATABASE_PORT: ${DATABASE_PORT:-3306}
+      DATABASE_NAME: ${DATABASE_NAME:-job_tracker}
       NODE_ENV: ${NODE_ENV}
 
       REDIS_HOST: redis-stack
@@ -24,7 +24,7 @@ services:
       CHOKIDAR_USEPOLLING: "true"
       CHOKIDAR_INTERVAL: 1000
     depends_on:
-      mongodb:
+      mysql:
         condition: service_healthy
       redis-stack:
         condition: service_healthy

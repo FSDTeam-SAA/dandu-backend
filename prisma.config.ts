@@ -1,5 +1,4 @@
-// Prisma configuration for MongoDB
-// MongoDB does not use Prisma migrations — use `prisma db push` instead.
+// Prisma configuration for MySQL.
 import 'dotenv/config';
 import { defineConfig } from 'prisma/config';
 

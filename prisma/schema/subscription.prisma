@@ -3,9 +3,9 @@
 // ================================
 
 model Subscription {
-    id                 String             @id @default(auto()) @map("_id") @db.ObjectId
-    authId             String             @db.ObjectId
-    planId             String             @db.ObjectId
+    id                 String             @id @default(uuid()) @db.VarChar(36)
+    authId             String             @db.VarChar(36)
+    planId             String             @db.VarChar(36)
     status             SubscriptionStatus @default(ACTIVE)
     currentPeriodStart DateTime
     currentPeriodEnd   DateTime
@@ -27,10 +27,10 @@ model Subscription {
 }
 
 model SubscriptionPlan {
-    id              String          @id @default(auto()) @map("_id") @db.ObjectId
+    id              String          @id @default(uuid()) @db.VarChar(36)
     name            String          @unique
     description     String?
-    price           Float // Changed from Decimal — MongoDB doesn't support @db.Decimal
+    price           Float
     currency        String          @default("USD")
     interval        BillingInterval
     intervalCount   Int             @default(1)
@@ -47,9 +47,9 @@ model SubscriptionPlan {
 }
 
 model Payment {
-    id                String        @id @default(auto()) @map("_id") @db.ObjectId
-    subscriptionId    String        @db.ObjectId
-    amount            Float // Changed from Decimal — MongoDB doesn't support @db.Decimal
+    id                String        @id @default(uuid()) @db.VarChar(36)
+    subscriptionId    String        @db.VarChar(36)
+    amount            Float
     currency          String        @default("USD")
     status            PaymentStatus
     provider          String // stripe, paypal, etc
@@ -66,10 +66,10 @@ model Payment {
 }
 
 model Invoice {
-    id             String        @id @default(auto()) @map("_id") @db.ObjectId
-    subscriptionId String        @db.ObjectId
+    id             String        @id @default(uuid()) @db.VarChar(36)
+    subscriptionId String        @db.VarChar(36)
     invoiceNumber  String        @unique
-    amount         Float // Changed from Decimal — MongoDB doesn't support @db.Decimal
+    amount         Float
     currency       String        @default("USD")
     status         InvoiceStatus
     dueDate        DateTime

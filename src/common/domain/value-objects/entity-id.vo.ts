@@ -1,33 +1,31 @@
 /**
  * EntityId Value Object
  *
- * Encapsulates the concept of an entity identifier. In our MongoDB setup,
- * IDs are 24-character hex strings (ObjectId format).
+ * Encapsulates the concept of an entity identifier.
  *
  * Why a Value Object?
  * → Provides compile-time type safety: you can't accidentally pass a
  *   random string where an EntityId is expected.
- * → Centralizes validation: ObjectId format is validated in one place.
+ * → Centralizes validation: UUID format is validated in one place.
  * → Makes refactoring easier: if ID format changes, only this class needs updates.
  *
- * Edge Case: MongoDB ObjectIds are exactly 24 hex characters. UUIDs from
- * PostgreSQL (36 chars with hyphens) will NOT pass validation.
  */
 export class EntityId {
-  private static readonly OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
+  private static readonly UUID_REGEX =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
   private constructor(private readonly _value: string) {}
 
   /**
    * Creates an EntityId from a string value.
-   * Validates that the string is a valid MongoDB ObjectId.
+   * Validates that the string is a valid UUID.
    *
-   * @throws Error if the value is not a valid ObjectId
+   * @throws Error if the value is not a valid UUID
    */
   static create(value: string): EntityId {
-    if (!value || !EntityId.OBJECT_ID_REGEX.test(value)) {
+    if (!value || !EntityId.UUID_REGEX.test(value)) {
       throw new Error(
-        `Invalid entity ID format: "${value}". Expected a 24-character hex string (MongoDB ObjectId).`,
+        `Invalid entity ID format: "${value}". Expected a UUID string.`,
       );
     }
     return new EntityId(value);

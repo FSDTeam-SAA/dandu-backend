@@ -3,8 +3,8 @@
 // ================================
 
 model Job {
-    id     String @id @default(auto()) @map("_id") @db.ObjectId
-    authId String @db.ObjectId // Owner of the job application
+    id     String @id @default(uuid()) @db.VarChar(36)
+    authId String @db.VarChar(36) // Owner of the job application
 
     // Company Info
     company         String
@@ -38,12 +38,12 @@ model Job {
     responseStatus ResponseStatus @default(NO_RESPONSE)
     responseDate   DateTime?
 
-    // Job Details (Text fields — @db.Text removed for MongoDB compatibility)
-    techStack        String[] // MongoDB native array support
-    jobDescription   String?
-    requirements     String?
-    responsibilities String?
-    benefits         String?
+    // Job Details
+    techStack        Json
+    jobDescription   String? @db.Text
+    requirements     String? @db.Text
+    responsibilities String? @db.Text
+    benefits         String? @db.Text
 
     // Interview Information
     interviewScheduled Boolean        @default(false)
@@ -55,11 +55,11 @@ model Job {
 
     // Organization & Tracking
     priority   JobPriority @default(MEDIUM)
-    tags       String[] // MongoDB native array support
+    tags       Json
     isFavorite Boolean     @default(false)
     isArchived Boolean     @default(false)
 
-    // Offer Details — Decimal changed to Float for MongoDB compatibility
+    // Offer Details
     offerAmount   Float?
     offerDate     DateTime?
     offerDeadline DateTime?
@@ -70,13 +70,13 @@ model Job {
     rejectionDate   DateTime?
 
     // Quick Notes (separate from detailed JobNote)
-    notes String?
+    notes String? @db.Text
 
     // AI Integration Fields (for future AI features)
     aiParsedData      Json? // Store raw AI parsing results
     aiConfidenceScore Float? // How confident was AI parsing (0-1)
     sourceType        JobSourceType @default(MANUAL)
-    rawJobPosting     String? // Original job posting for re-parsing
+    rawJobPosting     String? @db.Text // Original job posting for re-parsing
 
     // Follow-up Tracking (denormalized for quick access)
     nextFollowUpDate DateTime?
@@ -114,8 +114,8 @@ model Job {
 // ================================
 
 model JobFollowUp {
-    id            String         @id @default(auto()) @map("_id") @db.ObjectId
-    jobId         String         @db.ObjectId
+    id            String         @id @default(uuid()) @db.VarChar(36)
+    jobId         String         @db.VarChar(36)
     scheduledDate DateTime
     completedDate DateTime?
     status        FollowUpStatus @default(PENDING)
@@ -139,10 +139,10 @@ model JobFollowUp {
 // ================================
 
 model JobNote {
-    id        String   @id @default(auto()) @map("_id") @db.ObjectId
-    jobId     String   @db.ObjectId
+    id        String   @id @default(uuid()) @db.VarChar(36)
+    jobId     String   @db.VarChar(36)
     title     String
-    content   String
+    content   String   @db.Text
     isPinned  Boolean  @default(false)
     category  String? // Optional categorization (interview, research, etc.)
     createdAt DateTime @default(now())
@@ -161,11 +161,11 @@ model JobNote {
 // ================================
 
 model JobTimelineEvent {
-    id          String               @id @default(auto()) @map("_id") @db.ObjectId
-    jobId       String               @db.ObjectId
+    id          String               @id @default(uuid()) @db.VarChar(36)
+    jobId       String               @db.VarChar(36)
     eventType   JobTimelineEventType
     title       String
-    description String?
+    description String?              @db.Text
     metadata    Json? // Additional event-specific data
     createdAt   DateTime             @default(now())
 
@@ -181,8 +181,8 @@ model JobTimelineEvent {
 // ================================
 
 model JobDocument {
-    id        String          @id @default(auto()) @map("_id") @db.ObjectId
-    jobId     String          @db.ObjectId
+    id        String          @id @default(uuid()) @db.VarChar(36)
+    jobId     String          @db.VarChar(36)
     name      String
     type      JobDocumentType
     url       String? // Public URL or signed URL
@@ -207,14 +207,14 @@ model JobDocument {
 // ================================
 
 model JobReminder {
-    id           String          @id @default(auto()) @map("_id") @db.ObjectId
-    jobId        String          @db.ObjectId
+    id           String          @id @default(uuid()) @db.VarChar(36)
+    jobId        String          @db.VarChar(36)
     reminderType JobReminderType
     scheduledAt  DateTime
     sentAt       DateTime?
     status       ReminderStatus  @default(PENDING)
     title        String?
-    message      String?
+    message      String?         @db.Text
     channel      String          @default("email") // email, push, sms
     metadata     Json? // Additional reminder data
     createdAt    DateTime        @default(now())

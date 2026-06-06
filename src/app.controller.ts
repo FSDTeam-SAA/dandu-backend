@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, VERSION_NEUTRAL, Version } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 import { AppService } from './app.service';
@@ -10,6 +10,7 @@ export class AppController {
 
   @ApiOperation({ summary: 'Health check endpoint' })
   @SkipThrottle() // Skip rate limiting for health check
+  @Version(VERSION_NEUTRAL)
   @Get()
   getHello(): string {
     return this.appService.getHello();
@@ -17,6 +18,7 @@ export class AppController {
 
   @ApiOperation({ summary: 'Liveness probe' })
   @SkipThrottle()
+  @Version(VERSION_NEUTRAL)
   @Get('health')
   health() {
     return this.appService.health();
@@ -24,6 +26,7 @@ export class AppController {
 
   @ApiOperation({ summary: 'Readiness probe' })
   @SkipThrottle()
+  @Version(VERSION_NEUTRAL)
   @Get('ready')
   ready() {
     return this.appService.ready();

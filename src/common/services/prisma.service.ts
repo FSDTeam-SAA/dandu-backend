@@ -4,17 +4,16 @@ import { PrismaClient } from '@prisma/client';
 import { CustomLoggerService } from './custom-logger.service';
 
 /**
- * PrismaService — MongoDB-compatible Prisma Client wrapper.
+ * PrismaService — MySQL-compatible Prisma Client wrapper.
  *
  * Prisma 7 Breaking Change:
  * - `url` is removed from the schema's datasource block.
  * - For CLI tools (generate, db push): URL is read from prisma.config.ts
  * - For runtime: URL is passed via `datasourceUrl` in the PrismaClient constructor.
  *
- * MongoDB-specific notes:
- * - No driver adapter needed (unlike PostgreSQL's @prisma/adapter-pg).
- * - Connection pooling is managed via MongoDB connection string params.
- * - Transactions require a MongoDB Replica Set (Atlas provides this by default).
+ * MySQL-specific notes:
+ * - The connection URL is provided through DATABASE_URL.
+ * - Prisma manages the database connection pool.
  */
 @Injectable()
 export class PrismaService
@@ -22,7 +21,14 @@ export class PrismaService
   implements OnModuleInit, OnModuleDestroy
 {
   constructor(private readonly customLogger: CustomLoggerService) {
+    const databaseUrl = process.env.DATABASE_URL;
+
+    if (!databaseUrl) {
+      throw new Error('DATABASE_URL is required to initialize Prisma.');
+    }
+
     super({
+      datasourceUrl: databaseUrl,
       log:
         process.env.NODE_ENV === 'development'
           ? ['query', 'warn', 'error']
@@ -31,14 +37,14 @@ export class PrismaService
   }
 
   async onModuleInit() {
-    this.customLogger.log('Connecting to MongoDB...', 'PrismaService');
+    this.customLogger.log('Connecting to MySQL...', 'PrismaService');
     await this.$connect();
-    this.customLogger.log('MongoDB connected successfully', 'PrismaService');
+    this.customLogger.log('MySQL connected successfully', 'PrismaService');
   }
 
   async onModuleDestroy() {
-    this.customLogger.log('Disconnecting from MongoDB...', 'PrismaService');
+    this.customLogger.log('Disconnecting from MySQL...', 'PrismaService');
     await this.$disconnect();
-    this.customLogger.log('MongoDB disconnected', 'PrismaService');
+    this.customLogger.log('MySQL disconnected', 'PrismaService');
   }
 }

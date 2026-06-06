@@ -12,5 +12,5 @@ scrape_configs:
   - job_name: 'nestjs-app'
     static_configs:
       - targets: ['host.docker.internal:5000']
-    metrics_path: '/metrics'
+    metrics_path: '/v1/metrics'
     scrape_interval: 10s

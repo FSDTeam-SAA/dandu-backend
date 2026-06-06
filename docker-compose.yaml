@@ -2,49 +2,29 @@
 
 services:
   # ================================
-  # MongoDB Replica Set (required for Prisma transactions)
+  # MySQL Database
   # ================================
-  # Note: MongoDB transactions require a replica set.
-  # Atlas provides this by default. For local dev, we configure a single-node replica set.
-  mongodb:
-    image: mongo:7.0
-    container_name: mongodb
-    command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
+  mysql:
+    image: mysql:8.4
+    container_name: mysql_db
     ports:
-      - "27017:27017"
-    volumes:
-      - mongodb_data:/data/db
-      - mongodb_config:/data/configdb
-    healthcheck:
-      test: |
-        mongosh --port 27017 --quiet --eval "
-        try { rs.status().ok } catch(e) {
-          rs.initiate({_id:'rs0', members:[{_id:0, host:'localhost:27017'}]}).ok
-        }"
-      interval: 10s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-    networks:
-      - app_network
-
-  # ================================
-  # Mongo Express — MongoDB Admin UI
-  # ================================
-  mongo-express:
-    image: mongo-express:latest
-    container_name: mongo_express
+      - "3306:3306"
     environment:
-      ME_CONFIG_MONGODB_URL: mongodb://mongodb:27017/job_tracker?replicaSet=rs0&directConnection=true
-      ME_CONFIG_BASICAUTH: "false"
-    ports:
-      - "8081:8081"
-    depends_on:
-      mongodb:
-        condition: service_healthy
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${DATABASE_NAME:-job_tracker}
+      MYSQL_USER: ${DATABASE_USER:-dandu}
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD:-dandu}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: [ "CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
     networks:
       - app_network
-    restart: unless-stopped
 
   # ================================
   # Redis Stack — Cache, Rate Limiting, Sessions
@@ -141,8 +121,7 @@ networks:
     driver: bridge
 
 volumes:
-  mongodb_data:
-  mongodb_config:
+  mysql_data:
   redis-stack:
   redis_data:
   prometheus_data:

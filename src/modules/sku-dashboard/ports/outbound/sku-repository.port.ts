@@ -41,6 +41,9 @@ export interface UpsertProductInput {
   height?: number | null;
   imageUrl?: string | null;
   productUrl?: string | null;
+  material?: string | null;
+  thickness?: string | null;
+  packQty?: number | null;
 }
 
 export interface UpsertStockInput {
@@ -63,6 +66,18 @@ export interface UpsertChannelInput {
   price?: number | null;
   currency?: string;
   isActive?: boolean;
+}
+
+export interface UpsertSalesMetricInput {
+  sku: string;
+  channel: 'AMAZON' | 'EBAY' | 'WALMART' | 'SHOPIFY' | 'WEBSITE' | 'OTHER';
+  country?: string | null;
+  periodStart: Date;
+  periodEnd: Date;
+  unitsSold: number;
+  revenue?: number;
+  velocity?: number | null;
+  currency?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -130,6 +145,7 @@ export interface ISkuRepository {
   upsertProduct(input: UpsertProductInput): Promise<{ id: string }>;
   upsertStock(input: UpsertStockInput): Promise<void>;
   upsertChannel(input: UpsertChannelInput): Promise<void>;
+  upsertSalesMetric(input: UpsertSalesMetricInput): Promise<void>;
 
   // Update mutable product fields
   updateProduct(sku: string, fields: Partial<UpsertProductInput>): Promise<void>;
@@ -141,6 +157,7 @@ export interface ISkuRepository {
 
   // Sync log
   createSyncLog(input: CreateSyncLogInput): Promise<void>;
+  findLastSuccessfulSync(provider: string): Promise<Date | null>;
 
   // Dashboard aggregations
   getDashboardMetrics(periodDays: number): Promise<DashboardMetricsOutput>;

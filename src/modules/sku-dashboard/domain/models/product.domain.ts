@@ -1,5 +1,5 @@
 export type ProductStatus = 'ACTIVE' | 'INACTIVE' | 'DISCONTINUED';
-export type StockLocationType = 'FBA' | 'FBM' | 'WAREHOUSE' | 'THIRD_PARTY';
+export type StockLocationType = 'FBA' | 'FBM' | 'MFN' | 'WAREHOUSE' | 'THIRD_PARTY';
 export type SalesChannelType =
   | 'AMAZON'
   | 'EBAY'
@@ -24,6 +24,9 @@ export interface ProductDomainModel {
   };
   imageUrl: string | null;
   productUrl: string | null;
+  material: string | null;
+  thickness: string | null;
+  packQty: number | null;
   lastSyncedAt: Date | null;
 }
 

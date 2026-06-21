@@ -6,6 +6,7 @@ import {
   UpsertProductInput,
   UpsertStockInput,
   UpsertChannelInput,
+  UpsertSalesMetricInput,
   CreateImportBatchInput,
   UpdateImportBatchInput,
   ImportRowErrorInput,
@@ -23,9 +24,15 @@ const LOCATION_COLOURS: Record<string, string> = {
   'US-FBA': '#047857',
   'CA-FBA': '#34d399',
   'UK-FBA': '#064e3b',
+  'GB-FBA': '#064e3b',
+  'US-FBM': '#0f172a',
+  'CA-FBM': '#1e293b',
+  'UK-FBM': '#334155',
+  'GB-FBM': '#334155',
   'US-MFN': '#0f172a',
   'CA-MFN': '#1e293b',
   'UK-MFN': '#334155',
+  'GB-MFN': '#334155',
 };
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -36,6 +43,22 @@ const LOW_STOCK_THRESHOLD = 50;
 function locationColour(country: string, locationType: string): string {
   const key = `${country}-${locationType}`;
   return LOCATION_COLOURS[key] ?? '#64748b';
+}
+
+function startOfUtcDay(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function normalizeMetricPeriod(periodStart: Date, periodEnd: Date): { periodStart: Date; periodEnd: Date } {
+  const days = Math.max(
+    1,
+    Math.round((periodEnd.getTime() - periodStart.getTime()) / (24 * 60 * 60 * 1000)),
+  );
+  const normalizedEnd = startOfUtcDay(periodEnd);
+  return {
+    periodStart: new Date(normalizedEnd.getTime() - days * 24 * 60 * 60 * 1000),
+    periodEnd: normalizedEnd,
+  };
 }
 
 @Injectable()
@@ -150,6 +173,9 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
         height: input.height != null ? new Prisma.Decimal(input.height) : undefined,
         imageUrl: input.imageUrl ?? undefined,
         productUrl: input.productUrl ?? undefined,
+        material: input.material ?? undefined,
+        thickness: input.thickness ?? undefined,
+        packQty: input.packQty ?? undefined,
         lastSyncedAt: new Date(),
       },
       create: {
@@ -164,6 +190,9 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
         height: input.height != null ? new Prisma.Decimal(input.height) : undefined,
         imageUrl: input.imageUrl,
         productUrl: input.productUrl,
+        material: input.material,
+        thickness: input.thickness,
+        packQty: input.packQty,
         lastSyncedAt: new Date(),
       },
       select: { id: true },
@@ -241,6 +270,63 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
     });
   }
 
+  async upsertSalesMetric(input: UpsertSalesMetricInput): Promise<void> {
+    const product = await this.prisma.product.findUnique({
+      where: { sku: input.sku },
+      select: { id: true },
+    });
+    if (!product) return;
+
+    const { periodStart, periodEnd } = normalizeMetricPeriod(input.periodStart, input.periodEnd);
+
+    const productChannel = await this.prisma.productChannel.findFirst({
+      where: {
+        productId: product.id,
+        channel: input.channel as SalesChannelType,
+        ...(input.country ? { country: input.country } : {}),
+      },
+      select: { id: true },
+    });
+
+    await this.prisma.$transaction([
+      this.prisma.productSalesMetric.deleteMany({
+        where: {
+          productId: product.id,
+          channel: input.channel as SalesChannelType,
+          country: input.country ?? null,
+          periodStart,
+          periodEnd,
+        },
+      }),
+      this.prisma.productSalesMetric.create({
+        data: {
+          productId: product.id,
+          productChannelId: productChannel?.id,
+          channel: input.channel as SalesChannelType,
+          country: input.country,
+          periodStart,
+          periodEnd,
+          unitsSold: input.unitsSold,
+          revenue: new Prisma.Decimal(input.revenue ?? 0),
+          velocity:
+            input.velocity != null
+              ? new Prisma.Decimal(input.velocity)
+              : new Prisma.Decimal(
+                  input.unitsSold /
+                    Math.max(
+                      1,
+                      Math.round(
+                        (periodEnd.getTime() - periodStart.getTime()) /
+                          (24 * 60 * 60 * 1000),
+                      ),
+                    ),
+                ),
+          currency: input.currency ?? 'GBP',
+        },
+      }),
+    ]);
+  }
+
   async updateProduct(sku: string, fields: Partial<UpsertProductInput>): Promise<void> {
     const data: Prisma.ProductUpdateInput = {};
     if (fields.title !== undefined) data.title = fields.title;
@@ -253,6 +339,9 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
     if (fields.height !== undefined) data.height = fields.height != null ? new Prisma.Decimal(fields.height) : null;
     if (fields.imageUrl !== undefined) data.imageUrl = fields.imageUrl;
     if (fields.productUrl !== undefined) data.productUrl = fields.productUrl;
+    if (fields.material !== undefined) data.material = fields.material;
+    if (fields.thickness !== undefined) data.thickness = fields.thickness;
+    if (fields.packQty !== undefined) data.packQty = fields.packQty;
 
     await this.prisma.product.update({ where: { sku }, data });
   }
@@ -319,6 +408,18 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
           : Prisma.JsonNull,
       },
     });
+  }
+
+  async findLastSuccessfulSync(provider: string): Promise<Date | null> {
+    const log = await this.prisma.skuSyncLog.findFirst({
+      where: {
+        provider,
+        status: { in: ['SUCCESS', 'PARTIAL_SUCCESS'] },
+      },
+      orderBy: { startedAt: 'desc' },
+      select: { startedAt: true },
+    });
+    return log?.startedAt ?? null;
   }
 
   // ---------------------------------------------------------------------------

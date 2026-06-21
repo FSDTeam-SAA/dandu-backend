@@ -74,7 +74,7 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
       where: { sku },
       include: {
         stock: { orderBy: [{ country: 'asc' }, { locationType: 'asc' }] },
-        channels: { orderBy: [{ channel: 'asc' }, { country: 'asc' }] },
+        channels: { orderBy: [{ channel: 'asc' }, { country: 'asc' }, { asin: 'desc' }] },
         salesMetrics: { orderBy: [{ periodEnd: 'desc' }, { channel: 'asc' }] },
       },
     });
@@ -121,7 +121,7 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
       orderBy: { sku: 'asc' },
       include: {
         stock: { orderBy: [{ country: 'asc' }, { locationType: 'asc' }] },
-        channels: { orderBy: [{ channel: 'asc' }, { country: 'asc' }] },
+        channels: { orderBy: [{ channel: 'asc' }, { country: 'asc' }, { asin: 'desc' }] },
         salesMetrics: { orderBy: [{ periodEnd: 'desc' }, { channel: 'asc' }] },
       },
     });
@@ -242,14 +242,18 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
     });
     if (!product) return;
 
+    const country = input.country ?? '';
+    const asin = input.asin ?? '';
+    const listingId = input.listingId ?? '';
+
     await this.prisma.productChannel.upsert({
       where: {
         productId_channel_country_asin_listingId: {
           productId: product.id,
           channel: input.channel as SalesChannelType,
-          country: (input.country ?? null) as string,
-          asin: (input.asin ?? null) as string,
-          listingId: (input.listingId ?? null) as string,
+          country,
+          asin,
+          listingId,
         },
       },
       update: {
@@ -260,9 +264,9 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
       create: {
         productId: product.id,
         channel: input.channel as SalesChannelType,
-        country: input.country,
-        asin: input.asin,
-        listingId: input.listingId,
+        country,
+        asin,
+        listingId,
         price: input.price != null ? new Prisma.Decimal(input.price) : undefined,
         currency: input.currency ?? 'GBP',
         isActive: input.isActive ?? true,

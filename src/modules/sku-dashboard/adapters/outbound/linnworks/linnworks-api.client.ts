@@ -80,6 +80,11 @@ export interface LinnworksChannelListing {
   IsMultiVariation: boolean;
 }
 
+interface LinnworksChannelListingBatch {
+  StockItemId: string;
+  ChannelSkus?: LinnworksChannelListing[];
+}
+
 export interface LinnworksProcessedOrderSummary {
   pkOrderID: string;
   dProcessedOn?: string;
@@ -143,7 +148,7 @@ export class LinnworksApiClient {
   private readonly logger = new Logger(LinnworksApiClient.name);
 
   private cachedToken: string | null = null;
-  private cachedServer: string = 'https://api.linnworks.net';
+  private cachedServer: string;
   private tokenExpiresAt: Date | null = null;
 
   // Renew if less than 5 minutes left
@@ -152,9 +157,11 @@ export class LinnworksApiClient {
   private static readonly DEFAULT_TTL_MS = 25 * 60 * 1000;
 
   constructor(private readonly config: LinnworksConfig) {
-    if (config.initialAuthToken) {
+    this.cachedServer = config.initialServer;
+
+    if (config.initialSessionToken) {
       // Optional warm start for local debugging; normal operation authorizes on demand.
-      this.cachedToken = config.initialAuthToken;
+      this.cachedToken = config.initialSessionToken;
       this.tokenExpiresAt = new Date(Date.now() + LinnworksApiClient.DEFAULT_TTL_MS);
     }
   }
@@ -174,16 +181,16 @@ export class LinnworksApiClient {
     this.logger.log('Linnworks session token expired or near expiry — renewing…');
 
     const url = 'https://api.linnworks.net/api/Auth/AuthorizeByApplication';
-    const body = new URLSearchParams({
+    const body = {
       ApplicationId: this.config.applicationId,
       ApplicationSecret: this.config.applicationSecret,
-      Token: this.config.installationId,
-    });
+      Token: this.config.installationToken,
+    };
 
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
@@ -194,7 +201,7 @@ export class LinnworksApiClient {
     const data = (await response.json()) as LinnworksSessionTokenResponse;
 
     this.cachedToken = data.Token;
-    this.cachedServer = data.Server ?? 'https://api.linnworks.net';
+    this.cachedServer = data.Server ?? this.config.initialServer;
 
     if (data.Expires) {
       this.tokenExpiresAt = new Date(data.Expires);
@@ -395,14 +402,24 @@ export class LinnworksApiClient {
    * Fetch channel listings (ASIN, eBay listing IDs, prices) for all inventory items.
    */
   async getAllChannelListings(stockItemIds: string[]): Promise<LinnworksChannelListing[]> {
+    const BATCH = 100;
     const all: LinnworksChannelListing[] = [];
 
-    for (const stockItemId of stockItemIds) {
-      const result = await this.get<unknown>(
-        '/api/Inventory/GetInventoryItemChannelSKUs',
-        { inventoryItemId: stockItemId },
+    for (let i = 0; i < stockItemIds.length; i += BATCH) {
+      const inventoryItemIds = stockItemIds.slice(i, i + BATCH);
+      const result = await this.post<unknown>(
+        '/api/Inventory/BatchGetInventoryItemChannelSKUs',
+        { inventoryItemIds },
       );
-      all.push(...this.normalizeArray<LinnworksChannelListing>(result));
+      const batches = this.normalizeArray<LinnworksChannelListingBatch>(result);
+      for (const batch of batches) {
+        all.push(
+          ...(batch.ChannelSkus ?? []).map((listing) => ({
+            ...listing,
+            StockItemId: listing.StockItemId ?? batch.StockItemId,
+          })),
+        );
+      }
     }
 
     return all;

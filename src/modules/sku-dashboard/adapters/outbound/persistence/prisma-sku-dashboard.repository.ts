@@ -8,6 +8,7 @@ import {
   UpsertChannelInput,
   UpsertSalesMetricInput,
   IncrementSalesMetricInput,
+  ReplaceSalesMetricsForPeriodResult,
   CreateImportBatchInput,
   UpdateImportBatchInput,
   ImportRowErrorInput,
@@ -40,6 +41,7 @@ const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Se
 
 // Low-stock threshold
 const LOW_STOCK_THRESHOLD = 50;
+const SALES_METRIC_CREATE_BATCH_SIZE = 1000;
 
 function locationColour(country: string, locationType: string): string {
   const key = `${country}-${locationType}`;
@@ -414,6 +416,107 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
     });
 
     return true;
+  }
+
+  async replaceSalesMetricsForPeriod(
+    periodStartInput: Date,
+    periodEndInput: Date,
+    inputs: IncrementSalesMetricInput[],
+  ): Promise<ReplaceSalesMetricsForPeriodResult> {
+    const { periodStart, periodEnd } = normalizeMetricPeriod(periodStartInput, periodEndInput);
+    const uniqueSkus = [...new Set(inputs.map((input) => input.sku).filter(Boolean))];
+
+    const products = uniqueSkus.length > 0
+      ? await this.prisma.product.findMany({
+          where: { sku: { in: uniqueSkus } },
+          select: { id: true, sku: true },
+        })
+      : [];
+    const productBySku = new Map(products.map((product) => [product.sku, product]));
+    const productIds = products.map((product) => product.id);
+
+    const channels = productIds.length > 0
+      ? await this.prisma.productChannel.findMany({
+          where: { productId: { in: productIds } },
+          select: { id: true, productId: true, channel: true, country: true },
+        })
+      : [];
+
+    const channelByExactKey = new Map<string, { id: string }>();
+    const channelByFallbackKey = new Map<string, { id: string }>();
+    for (const channel of channels) {
+      const fallbackKey = [channel.productId, channel.channel].join('|');
+      if (!channelByFallbackKey.has(fallbackKey)) channelByFallbackKey.set(fallbackKey, channel);
+      channelByExactKey.set([channel.productId, channel.channel, channel.country ?? ''].join('|'), channel);
+    }
+
+    const days = Math.max(
+      1,
+      Math.round((periodEnd.getTime() - periodStart.getTime()) / (24 * 60 * 60 * 1000)),
+    );
+    const data: Prisma.ProductSalesMetricCreateManyInput[] = [];
+    let skipped = 0;
+
+    for (const input of inputs) {
+      const product = productBySku.get(input.sku);
+      if (!product) {
+        skipped += input.unitsSold;
+        continue;
+      }
+
+      const channel = input.channel as SalesChannelType;
+      const country = input.country ?? null;
+      const productChannel =
+        channelByExactKey.get([product.id, channel, country ?? ''].join('|')) ??
+        channelByFallbackKey.get([product.id, channel].join('|'));
+      const velocity = input.velocity ?? input.unitsSold / days;
+
+      data.push({
+        productId: product.id,
+        productChannelId: productChannel?.id,
+        channel,
+        country,
+        periodStart,
+        periodEnd,
+        unitsSold: input.unitsSold,
+        revenue: new Prisma.Decimal(input.revenue ?? 0),
+        velocity: new Prisma.Decimal(velocity),
+        currency: input.currency ?? 'GBP',
+      });
+    }
+
+    if (data.length === 0) {
+      const cleared = await this.prisma.productSalesMetric.deleteMany({
+        where: { periodStart, periodEnd },
+      });
+      return {
+        cleared: cleared.count,
+        created: 0,
+        skipped,
+      };
+    }
+
+    const createOperations: Prisma.PrismaPromise<Prisma.BatchPayload>[] = [];
+    for (let i = 0; i < data.length; i += SALES_METRIC_CREATE_BATCH_SIZE) {
+      createOperations.push(
+        this.prisma.productSalesMetric.createMany({
+          data: data.slice(i, i + SALES_METRIC_CREATE_BATCH_SIZE),
+        }),
+      );
+    }
+
+    const [cleared, ...createdBatches] = await this.prisma.$transaction([
+      this.prisma.productSalesMetric.deleteMany({
+        where: { periodStart, periodEnd },
+      }),
+      ...createOperations,
+    ]);
+
+    return {
+      cleared: cleared.count,
+      created: createdBatches.reduce((sum, batch) => sum + batch.count, 0),
+      skipped,
+    };
   }
 
   async clearSalesMetricsForPeriod(periodStart: Date, periodEnd: Date): Promise<number> {

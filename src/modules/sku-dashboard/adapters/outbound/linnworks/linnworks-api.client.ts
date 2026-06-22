@@ -647,7 +647,7 @@ export class LinnworksApiClient {
   }
 
   async getOrderItemsByOrderIds(orderIds: string[]): Promise<Map<string, LinnworksOrderItem[]>> {
-    const BATCH = 150;
+    const BATCH = 200;
     const itemsByOrderId = new Map<string, LinnworksOrderItem[]>();
 
     for (let i = 0; i < orderIds.length; i += BATCH) {

@@ -198,7 +198,7 @@ export class LinnworksHistoricalSalesIngestionService {
   async ingest(options: HistoricalSalesIngestionOptions = {}): Promise<HistoricalSalesIngestionResult> {
     const startedAt = Date.now();
     const chunkDays = options.chunkDays ?? 90;
-    const resultsPerPage = options.resultsPerPage ?? 150;
+    const resultsPerPage = options.resultsPerPage ?? 200;
     const toDate = endOfUtcDay(options.toDate ?? new Date());
     const historyDays = Math.max(1, options.historyDays ?? 365);
     const fromDate = startOfUtcDay(
@@ -222,7 +222,7 @@ export class LinnworksHistoricalSalesIngestionService {
       }
 
       const chunks = createSafeDateChunks(fromDate, toDate, chunkDays);
-      let metricsCleared = false;
+      const metricBucket = new Map<string, IncrementSalesMetricInput>();
 
       for (const chunk of chunks) {
         const chunkResult: HistoricalSalesChunkResult = {
@@ -248,11 +248,6 @@ export class LinnworksHistoricalSalesIngestionService {
           pagesProcessed++;
           chunkResult.pagesProcessed++;
 
-          if (!metricsCleared) {
-            clearedMetrics = await this.skuRepository.clearSalesMetricsForPeriod(fromDate, toDate);
-            metricsCleared = true;
-          }
-
           const orders = page.data;
           const orderById = new Map(orders.map((order) => [normalizeOrderId(order.pkOrderID), order]));
           const orderIds = orders.map((order) => order.pkOrderID);
@@ -261,7 +256,6 @@ export class LinnworksHistoricalSalesIngestionService {
 
           if (orderIds.length > 0) {
             const itemsByOrderId = await this.linnworksClient.getOrderItemsByOrderIds(orderIds);
-            const metricBucket = new Map<string, IncrementSalesMetricInput>();
 
             for (const [orderId, items] of itemsByOrderId) {
               const order = orderById.get(normalizeOrderId(orderId));
@@ -273,17 +267,6 @@ export class LinnworksHistoricalSalesIngestionService {
                 collectMetricInputs(order, { ...item, pkOrderID: extractOrderId(item) ?? orderId }, fromDate, toDate, metricBucket);
               }
             }
-
-            for (const metric of metricBucket.values()) {
-              try {
-                const updated = await this.skuRepository.incrementSalesMetric(metric);
-                if (updated) metricsUpdated++;
-                else skippedItemRows += metric.unitsSold;
-              } catch (err) {
-                failedRows++;
-                this.logger.warn(`Failed to write historical sales metric for ${metric.sku}: ${(err as Error).message}`);
-              }
-            }
           }
 
           pageNumber++;
@@ -291,6 +274,15 @@ export class LinnworksHistoricalSalesIngestionService {
 
         chunkResults.push(chunkResult);
       }
+
+      const replaceResult = await this.skuRepository.replaceSalesMetricsForPeriod(
+        fromDate,
+        toDate,
+        [...metricBucket.values()],
+      );
+      clearedMetrics = replaceResult.cleared;
+      metricsUpdated = replaceResult.created;
+      skippedItemRows = replaceResult.skipped;
 
       const durationMs = Date.now() - startedAt;
       await this.skuRepository.createSyncLog({

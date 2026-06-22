@@ -82,6 +82,12 @@ export interface UpsertSalesMetricInput {
 
 export interface IncrementSalesMetricInput extends UpsertSalesMetricInput {}
 
+export interface ReplaceSalesMetricsForPeriodResult {
+  cleared: number;
+  created: number;
+  skipped: number;
+}
+
 // ---------------------------------------------------------------------------
 // Browse / filter types
 // ---------------------------------------------------------------------------
@@ -149,6 +155,11 @@ export interface ISkuRepository {
   upsertChannel(input: UpsertChannelInput): Promise<void>;
   upsertSalesMetric(input: UpsertSalesMetricInput): Promise<void>;
   incrementSalesMetric(input: IncrementSalesMetricInput): Promise<boolean>;
+  replaceSalesMetricsForPeriod(
+    periodStart: Date,
+    periodEnd: Date,
+    inputs: IncrementSalesMetricInput[],
+  ): Promise<ReplaceSalesMetricsForPeriodResult>;
   clearSalesMetricsForPeriod(periodStart: Date, periodEnd: Date): Promise<number>;
 
   // Update mutable product fields

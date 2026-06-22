@@ -127,8 +127,13 @@ function toUserDate(date: string): string {
 
 function parseLinnworksSearchError(message: string) {
   const match = message.match(/chunk ([^ ]+) to ([^,]+), page (\d+)/);
+  const isProcessedOrderValidationError =
+    message.includes('Linnworks API error 400') &&
+    (message.includes('The request is invalid') ||
+      message.includes('End date is required when searching using a date range'));
+
   return {
-    isLinnworksInvalidRequest: message.includes('Linnworks API error 400') && message.includes('The request is invalid'),
+    isLinnworksInvalidRequest: isProcessedOrderValidationError,
     failedChunk: match
       ? {
           fromDate: match[1],
@@ -141,6 +146,10 @@ function parseLinnworksSearchError(message: string) {
 
 function extractOrderId(item: LinnworksOrderItem): string | undefined {
   return item.pkOrderID ?? item.fkOrderId ?? item.OrderId;
+}
+
+function normalizeOrderId(orderId: string): string {
+  return orderId.trim().toLowerCase();
 }
 
 function collectMetricInputs(
@@ -189,7 +198,7 @@ export class LinnworksHistoricalSalesIngestionService {
   async ingest(options: HistoricalSalesIngestionOptions = {}): Promise<HistoricalSalesIngestionResult> {
     const startedAt = Date.now();
     const chunkDays = options.chunkDays ?? 90;
-    const resultsPerPage = options.resultsPerPage ?? 200;
+    const resultsPerPage = options.resultsPerPage ?? 150;
     const toDate = endOfUtcDay(options.toDate ?? new Date());
     const historyDays = Math.max(1, options.historyDays ?? 365);
     const fromDate = startOfUtcDay(
@@ -245,8 +254,8 @@ export class LinnworksHistoricalSalesIngestionService {
           }
 
           const orders = page.data;
-          const orderById = new Map(orders.map((order) => [order.pkOrderID, order]));
-          const orderIds = [...orderById.keys()];
+          const orderById = new Map(orders.map((order) => [normalizeOrderId(order.pkOrderID), order]));
+          const orderIds = orders.map((order) => order.pkOrderID);
           ordersProcessed += orderIds.length;
           chunkResult.ordersProcessed += orderIds.length;
 
@@ -255,7 +264,7 @@ export class LinnworksHistoricalSalesIngestionService {
             const metricBucket = new Map<string, IncrementSalesMetricInput>();
 
             for (const [orderId, items] of itemsByOrderId) {
-              const order = orderById.get(orderId);
+              const order = orderById.get(normalizeOrderId(orderId));
               if (!order) continue;
 
               for (const item of items) {

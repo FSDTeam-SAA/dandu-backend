@@ -86,7 +86,7 @@ interface LinnworksChannelListingBatch {
 }
 
 function formatLinnworksDate(date: Date): string {
-  return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  return date.toISOString().replace('T', ' ').slice(0, 19);
 }
 
 export interface LinnworksProcessedOrderSummary {
@@ -120,11 +120,16 @@ export interface LinnworksOrderItem {
   pkOrderID?: string;
   fkOrderId?: string;
   OrderId?: string;
+  ItemTitle?: string;
   SKU?: string;
   ItemNumber?: string;
+  sku?: string;
+  itemNumber?: string;
   ItemSource?: string;
   Quantity?: number;
+  quantity?: number;
   PricePerUnit?: number;
+  pricePerUnit?: number;
   Cost?: number;
   StockItemId?: string;
   CompositeSubItems?: LinnworksOrderItem[];
@@ -296,11 +301,53 @@ export class LinnworksApiClient {
 
   private normalizeOrderItemsByOrderId(response: unknown, orderIds: string[]): Map<string, LinnworksOrderItem[]> {
     const itemsByOrderId = new Map<string, LinnworksOrderItem[]>();
+    const requestedOrderIds = new Set(orderIds.map((id) => id.toLowerCase()));
 
-    const pushItem = (orderId: string | undefined, item: LinnworksOrderItem) => {
-      const resolvedOrderId = orderId ?? item.pkOrderID ?? item.fkOrderId ?? item.OrderId;
+    const readFirstString = (object: Record<string, unknown>, keys: string[]): string | undefined => {
+      for (const key of keys) {
+        const value = object[key];
+        if (typeof value === 'string' && value.trim() !== '') return value;
+      }
+      return undefined;
+    };
+
+    const readFirstNumber = (object: Record<string, unknown>, keys: string[]): number | undefined => {
+      for (const key of keys) {
+        const value = object[key];
+        if (typeof value === 'number' && Number.isFinite(value)) return value;
+        if (typeof value === 'string' && value.trim() !== '') {
+          const parsed = Number(value);
+          if (Number.isFinite(parsed)) return parsed;
+        }
+      }
+      return undefined;
+    };
+
+    const pushItem = (orderId: string | undefined, item: Record<string, unknown>) => {
+      const resolvedOrderId = orderId ?? readFirstString(item, [
+        'pkOrderID',
+        'pkOrderId',
+        'fkOrderId',
+        'OrderId',
+        'orderId',
+        'id',
+      ]);
       if (!resolvedOrderId) return;
-      itemsByOrderId.set(resolvedOrderId, [...(itemsByOrderId.get(resolvedOrderId) ?? []), item]);
+
+      const sku = readFirstString(item, ['SKU', 'Sku', 'sku', 'ItemNumber', 'itemNumber', 'ItemSku', 'itemSku']);
+      const quantity = readFirstNumber(item, ['Quantity', 'quantity', 'Qty', 'qty', 'nQty']);
+      if (!sku || !quantity || quantity <= 0) return;
+
+      const normalizedItem: LinnworksOrderItem = {
+        ...(item as LinnworksOrderItem),
+        pkOrderID: resolvedOrderId,
+        SKU: sku,
+        ItemNumber: readFirstString(item, ['ItemNumber', 'itemNumber']) ?? sku,
+        Quantity: quantity,
+        PricePerUnit: readFirstNumber(item, ['PricePerUnit', 'pricePerUnit', 'Price', 'price', 'UnitPrice', 'unitPrice']),
+      };
+
+      itemsByOrderId.set(resolvedOrderId, [...(itemsByOrderId.get(resolvedOrderId) ?? []), normalizedItem]);
     };
 
     const visit = (value: unknown, inheritedOrderId?: string) => {
@@ -313,35 +360,69 @@ export class LinnworksApiClient {
 
       if (typeof value !== 'object') return;
       const object = value as Record<string, unknown>;
-      const objectOrderId = String(
-        object.pkOrderID ??
-          object.fkOrderId ??
-          object.OrderId ??
-          object.OrderIdGuid ??
-          inheritedOrderId ??
-          '',
-      ) || undefined;
+      const objectOrderId = readFirstString(object, [
+        'pkOrderID',
+        'pkOrderId',
+        'pkOrderid',
+        'fkOrderId',
+        'OrderId',
+        'orderId',
+        'OrderIdGuid',
+        'id',
+      ]) ?? inheritedOrderId;
 
-      const nestedItems = object.Items ?? object.OrderItems ?? object.Data;
+      const nestedItems =
+        object.Items ??
+        object.items ??
+        object.OrderItems ??
+        object.orderItems ??
+        object.OrderLines ??
+        object.orderLines ??
+        object.lines ??
+        object.Lines;
       if (Array.isArray(nestedItems)) {
-        for (const item of nestedItems) visit(item, objectOrderId);
+        for (const item of nestedItems) {
+          if (item && typeof item === 'object') pushItem(objectOrderId, item as Record<string, unknown>);
+        }
         return;
       }
 
-      const maybeItem = object as LinnworksOrderItem;
-      if (maybeItem.SKU || maybeItem.ItemNumber || maybeItem.ItemSource || maybeItem.Quantity != null) {
-        pushItem(objectOrderId, maybeItem);
+      const directSku = readFirstString(object, ['SKU', 'Sku', 'sku', 'ItemNumber', 'itemNumber', 'ItemSku', 'itemSku']);
+      const directQuantity = readFirstNumber(object, ['Quantity', 'quantity', 'Qty', 'qty', 'nQty']);
+      if (directSku && directQuantity && directQuantity > 0) {
+        pushItem(objectOrderId, object);
         return;
       }
 
       for (const [key, child] of Object.entries(object)) {
-        if (orderIds.includes(key)) {
-          visit(child, key);
+        const nextOrderId = requestedOrderIds.has(key.toLowerCase()) ? key : objectOrderId;
+        if (child && typeof child === 'object') {
+          visit(child, nextOrderId);
         }
       }
     };
 
     visit(response);
+
+    if (itemsByOrderId.size === 0 && response && typeof response === 'object') {
+      const root = response as Record<string, unknown>;
+      const keys = Object.keys(root).slice(0, 12).join(', ');
+      this.logger.warn(`Unable to parse GetOrders line items. Top-level keys: ${keys || '(none)'}`);
+      for (const key of ['Data', 'data', 'Orders', 'orders', 'Items', 'items']) {
+        const child = root[key];
+        if (Array.isArray(child) && child[0] && typeof child[0] === 'object') {
+          const childKeys = Object.keys(child[0] as Record<string, unknown>).slice(0, 16).join(', ');
+          this.logger.warn(`GetOrders ${key}[0] keys: ${childKeys}`);
+          break;
+        }
+        if (child && typeof child === 'object' && !Array.isArray(child)) {
+          const childKeys = Object.keys(child as Record<string, unknown>).slice(0, 16).join(', ');
+          this.logger.warn(`GetOrders ${key} keys: ${childKeys}`);
+          break;
+        }
+      }
+    }
+
     return itemsByOrderId;
   }
 
@@ -530,61 +611,29 @@ export class LinnworksApiClient {
     from: Date,
     to: Date,
     pageNumber: number,
-    entriesPerPage = 200,
+    entriesPerPage = 150,
   ): Promise<LinnworksProcessedOrderPage> {
     const fromValue = formatLinnworksDate(from);
     const toValue = formatLinnworksDate(to);
     const path = '/api/ProcessedOrders/SearchProcessedOrdersPaged';
     const request = {
-      SearchTerm: '',
-      SearchFilters: [],
-      DateField: 'dProcessedOn',
-      From: fromValue,
-      To: toValue,
-      PageNumber: pageNumber,
-      EntriesPerPage: entriesPerPage,
-      SearchSorting: {
-        SortField: 'dProcessedOn',
-        SortDirection: 'ASC',
-      },
+      from: fromValue,
+      to: toValue,
+      dateType: 'PROCESSED',
+      searchField: '',
+      exactMatch: false,
+      searchTerm: '',
+      pageNum: pageNumber,
+      numEntriesPerPage: entriesPerPage,
     };
 
-    const fallbackRequests = [
-      request,
-      { request },
-      {
-        request: {
-          SearchTerm: '',
-          SearchFilters: [],
-          DateField: 'processed',
-          FromDate: fromValue,
-          ToDate: toValue,
-          PageNumber: pageNumber,
-          EntriesPerPage: entriesPerPage,
-          ResultsPerPage: entriesPerPage,
-          SearchSorting: {
-            SortField: 'dProcessedOn',
-            SortDirection: 'ASC',
-          },
-        },
-      },
-    ];
-
     let result: unknown;
-    let lastError: Error | null = null;
-    for (const body of fallbackRequests) {
-      try {
-        result = await this.post<unknown>(path, body);
-        lastError = null;
-        break;
-      } catch (err) {
-        lastError = err as Error;
-      }
-    }
-
-    if (lastError) {
+    try {
+      result = await this.post<unknown>(path, request);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       throw new Error(
-        `${lastError.message} while fetching processed orders chunk ${fromValue} to ${toValue}, page ${pageNumber}`,
+        `${message} while fetching processed orders chunk ${fromValue} to ${toValue}, page ${pageNumber}; requestBody=${JSON.stringify(request)}`,
       );
     }
 
@@ -603,29 +652,19 @@ export class LinnworksApiClient {
 
     for (let i = 0; i < orderIds.length; i += BATCH) {
       const batchIds = orderIds.slice(i, i + BATCH);
-      let result: unknown;
-
-      try {
-        result = await this.post<unknown>(
-          '/api/ProcessedOrders/GetOrderItemsByOrderIds',
-          batchIds,
-        );
-      } catch (err) {
-        this.logger.warn(`Retrying GetOrderItemsByOrderIds with object payload: ${(err as Error).message}`);
-        try {
-          result = await this.post<unknown>(
-            '/api/ProcessedOrders/GetOrderItemsByOrderIds',
-            { pkOrderIds: batchIds },
-          );
-        } catch {
-          result = await this.post<unknown>(
-            '/api/ProcessedOrders/GetOrderItemsByOrderIds',
-            { orderIds: batchIds },
-          );
-        }
-      }
+      const result = await this.post<unknown>(
+        '/api/Orders/GetOrders',
+        {
+          ordersIds: batchIds,
+          loadItems: true,
+          loadAdditionalInfo: false,
+        },
+      );
 
       const batchItems = this.normalizeOrderItemsByOrderId(result, batchIds);
+      if (batchItems.size === 0) {
+        this.logger.warn(`GetOrders returned no parsed line items for ${batchIds.length} processed orders`);
+      }
       for (const [orderId, items] of batchItems) {
         itemsByOrderId.set(orderId, [...(itemsByOrderId.get(orderId) ?? []), ...items]);
       }

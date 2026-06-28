@@ -1,3 +1,96 @@
+
+# dependencies
+node_modules/
+
+# compiled output
+dist/
+build/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# local environment files - NEVER commit secrets!
+.env
+.env.local
+.env.*.local
+.env.production
+!.env.example
+!.env.*.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tests
+coverage/
+.nyc_output/
+
+# IDEs and editors
+.idea/
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# caches and temp directories
+.temp/
+.tmp/
+.cache/
+.eslintcache
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Diagnostic reports (https://nodejs.org/api/report.html)
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# database and generated artifacts
+db/
+generated/
+*.tsbuildinfo
+
+# secrets and certificates - NEVER commit!
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.jks
+*.keystore
+secrets/
+.secrets/
+
+# AWS/Cloud credentials
+.aws/
+.azure/
+
+# local tooling
+.agents/
+.codex/
+.qodo/
+
+# security files
+audit-logs/
+security-reports/
+=======
 # compiled output
 /dist
 /node_modules
@@ -70,3 +163,4 @@ docs
 .codex
 .qodo
 config.bat
+

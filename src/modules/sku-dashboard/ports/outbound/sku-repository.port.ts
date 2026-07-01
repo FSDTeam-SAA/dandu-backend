@@ -1,4 +1,3 @@
-
 import { SkuMetricsDomainModel } from '../../domain/models/product.domain';
 
 // ---------------------------------------------------------------------------
@@ -34,6 +33,7 @@ export interface UpsertProductInput {
   sku: string;
   title: string;
   brand?: string | null;
+  category?: string | null;
   cost?: number | null;
   currency?: string;
   weight?: number | null;
@@ -101,7 +101,14 @@ export interface DeleteProductsNotInSkuSetResult {
 export interface SkuBrowseFilters {
   q?: string;
   stockStatus?: 'ALL' | 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
-  channel?: 'ALL' | 'AMAZON' | 'EBAY' | 'WALMART' | 'SHOPIFY' | 'WEBSITE' | 'OTHER';
+  channel?:
+    | 'ALL'
+    | 'AMAZON'
+    | 'EBAY'
+    | 'WALMART'
+    | 'SHOPIFY'
+    | 'WEBSITE'
+    | 'OTHER';
   cursor?: string;
   limit?: number;
 }
@@ -166,15 +173,26 @@ export interface ISkuRepository {
     periodEnd: Date,
     inputs: IncrementSalesMetricInput[],
   ): Promise<ReplaceSalesMetricsForPeriodResult>;
-  clearSalesMetricsForPeriod(periodStart: Date, periodEnd: Date): Promise<number>;
+  clearSalesMetricsForPeriod(
+    periodStart: Date,
+    periodEnd: Date,
+  ): Promise<number>;
 
   // Update mutable product fields
-  updateProduct(sku: string, fields: Partial<UpsertProductInput>): Promise<void>;
-  deleteProductsNotInSkus(skus: string[]): Promise<DeleteProductsNotInSkuSetResult>;
+  updateProduct(
+    sku: string,
+    fields: Partial<UpsertProductInput>,
+  ): Promise<void>;
+  deleteProductsNotInSkus(
+    skus: string[],
+  ): Promise<DeleteProductsNotInSkuSetResult>;
 
   // Import batch tracking
   createImportBatch(input: CreateImportBatchInput): Promise<{ id: string }>;
-  updateImportBatch(batchId: string, input: UpdateImportBatchInput): Promise<void>;
+  updateImportBatch(
+    batchId: string,
+    input: UpdateImportBatchInput,
+  ): Promise<void>;
   saveRowErrors(errors: ImportRowErrorInput[]): Promise<void>;
 
   // Sync log

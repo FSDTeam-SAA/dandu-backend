@@ -1,5 +1,8 @@
 import { Prisma } from '@prisma/client';
-import { SkuMetricsDomainModel, StockLocationType } from '../../../../domain/models/product.domain';
+import {
+  SkuMetricsDomainModel,
+  StockLocationType,
+} from '../../../../domain/models/product.domain';
 
 type ProductWithMetrics = Prisma.ProductGetPayload<{
   include: {
@@ -24,10 +27,14 @@ export class SkuDashboardMapper {
         sku: product.sku,
         title: product.title,
         brand: product.brand,
+        category: product.category,
         status: product.status,
         cost: decimalToNumber(product.cost),
         currency: product.currency,
         weight: decimalToNumber(product.weight),
+        length: decimalToNumber(product.length),
+        width: decimalToNumber(product.width),
+        height: decimalToNumber(product.height),
         dimensions: {
           length: decimalToNumber(product.length),
           width: decimalToNumber(product.width),
@@ -39,8 +46,12 @@ export class SkuDashboardMapper {
         thickness: product.thickness,
         packQty: product.packQty,
         lastSyncedAt: product.lastSyncedAt,
+        createdAt: product.createdAt,
+        updatedAt: product.updatedAt,
       },
       stock: product.stock.map((stock) => ({
+        id: stock.id,
+        productId: stock.productId,
         country: stock.country,
         locationType: toResponseLocationType(stock.locationType),
         warehouse: stock.warehouse,
@@ -48,8 +59,11 @@ export class SkuDashboardMapper {
         reserved: stock.reserved,
         inbound: stock.inbound,
         available: stock.available,
+        updatedAt: stock.updatedAt,
       })),
       channels: product.channels.map((channel) => ({
+        id: channel.id,
+        productId: channel.productId,
         channel: channel.channel,
         country: channel.country || null,
         asin: channel.asin || null,
@@ -57,8 +71,12 @@ export class SkuDashboardMapper {
         price: decimalToNumber(channel.price),
         currency: channel.currency,
         isActive: channel.isActive,
+        updatedAt: channel.updatedAt,
       })),
       salesMetrics: product.salesMetrics.map((metric) => ({
+        id: metric.id,
+        productId: metric.productId,
+        productChannelId: metric.productChannelId,
         channel: metric.channel,
         country: metric.country,
         periodStart: metric.periodStart,
@@ -67,6 +85,8 @@ export class SkuDashboardMapper {
         revenue: metric.revenue.toNumber(),
         velocity: decimalToNumber(metric.velocity),
         currency: metric.currency,
+        createdAt: metric.createdAt,
+        updatedAt: metric.updatedAt,
       })),
     };
   }

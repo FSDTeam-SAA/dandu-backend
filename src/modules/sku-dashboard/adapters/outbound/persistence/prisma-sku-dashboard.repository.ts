@@ -1,4 +1,3 @@
-
 import { Injectable } from '@nestjs/common';
 import { Prisma, SalesChannelType, StockLocationType } from '@prisma/client';
 import { PrismaService } from '../../../../../common/services/prisma.service';
@@ -39,7 +38,20 @@ const LOCATION_COLOURS: Record<string, string> = {
   'GB-MFN': '#334155',
 };
 
-const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_NAMES = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
 
 // Low-stock threshold
 const LOW_STOCK_THRESHOLD = 50;
@@ -52,13 +64,20 @@ function locationColour(country: string, locationType: string): string {
 }
 
 function startOfUtcDay(date: Date): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
 }
 
-function normalizeMetricPeriod(periodStart: Date, periodEnd: Date): { periodStart: Date; periodEnd: Date } {
+function normalizeMetricPeriod(
+  periodStart: Date,
+  periodEnd: Date,
+): { periodStart: Date; periodEnd: Date } {
   const days = Math.max(
     1,
-    Math.round((periodEnd.getTime() - periodStart.getTime()) / (24 * 60 * 60 * 1000)),
+    Math.round(
+      (periodEnd.getTime() - periodStart.getTime()) / (24 * 60 * 60 * 1000),
+    ),
   );
   const normalizedEnd = startOfUtcDay(periodEnd);
   return {
@@ -80,7 +99,9 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
       where: { sku },
       include: {
         stock: { orderBy: [{ country: 'asc' }, { locationType: 'asc' }] },
-        channels: { orderBy: [{ channel: 'asc' }, { country: 'asc' }, { asin: 'desc' }] },
+        channels: {
+          orderBy: [{ channel: 'asc' }, { country: 'asc' }, { asin: 'desc' }],
+        },
         salesMetrics: { orderBy: [{ periodEnd: 'desc' }, { channel: 'asc' }] },
       },
     });
@@ -127,7 +148,9 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
       orderBy: { sku: 'asc' },
       include: {
         stock: { orderBy: [{ country: 'asc' }, { locationType: 'asc' }] },
-        channels: { orderBy: [{ channel: 'asc' }, { country: 'asc' }, { asin: 'desc' }] },
+        channels: {
+          orderBy: [{ channel: 'asc' }, { country: 'asc' }, { asin: 'desc' }],
+        },
         salesMetrics: { orderBy: [{ periodEnd: 'desc' }, { channel: 'asc' }] },
       },
     });
@@ -138,12 +161,19 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
     // Apply stock status filter in memory (requires aggregation across locations)
     if (stockStatus && stockStatus !== 'ALL') {
       items = items.filter((item) => {
-        const totalAvailable = item.stock.reduce((sum, s) => sum + (s.available ?? 0), 0);
+        const totalAvailable = item.stock.reduce(
+          (sum, s) => sum + (s.available ?? 0),
+          0,
+        );
         switch (stockStatus) {
-          case 'IN_STOCK':    return totalAvailable > LOW_STOCK_THRESHOLD;
-          case 'LOW_STOCK':   return totalAvailable > 0 && totalAvailable <= LOW_STOCK_THRESHOLD;
-          case 'OUT_OF_STOCK': return totalAvailable === 0;
-          default: return true;
+          case 'IN_STOCK':
+            return totalAvailable > LOW_STOCK_THRESHOLD;
+          case 'LOW_STOCK':
+            return totalAvailable > 0 && totalAvailable <= LOW_STOCK_THRESHOLD;
+          case 'OUT_OF_STOCK':
+            return totalAvailable === 0;
+          default:
+            return true;
         }
       });
     }
@@ -171,12 +201,17 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
       update: {
         title: input.title,
         brand: input.brand ?? undefined,
+        category: input.category ?? undefined,
         cost: input.cost != null ? new Prisma.Decimal(input.cost) : undefined,
         currency: input.currency ?? undefined,
-        weight: input.weight != null ? new Prisma.Decimal(input.weight) : undefined,
-        length: input.length != null ? new Prisma.Decimal(input.length) : undefined,
-        width: input.width != null ? new Prisma.Decimal(input.width) : undefined,
-        height: input.height != null ? new Prisma.Decimal(input.height) : undefined,
+        weight:
+          input.weight != null ? new Prisma.Decimal(input.weight) : undefined,
+        length:
+          input.length != null ? new Prisma.Decimal(input.length) : undefined,
+        width:
+          input.width != null ? new Prisma.Decimal(input.width) : undefined,
+        height:
+          input.height != null ? new Prisma.Decimal(input.height) : undefined,
         imageUrl: input.imageUrl ?? undefined,
         productUrl: input.productUrl ?? undefined,
         material: input.material ?? undefined,
@@ -188,12 +223,17 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
         sku: input.sku,
         title: input.title,
         brand: input.brand,
+        category: input.category,
         cost: input.cost != null ? new Prisma.Decimal(input.cost) : undefined,
         currency: input.currency ?? 'USD',
-        weight: input.weight != null ? new Prisma.Decimal(input.weight) : undefined,
-        length: input.length != null ? new Prisma.Decimal(input.length) : undefined,
-        width: input.width != null ? new Prisma.Decimal(input.width) : undefined,
-        height: input.height != null ? new Prisma.Decimal(input.height) : undefined,
+        weight:
+          input.weight != null ? new Prisma.Decimal(input.weight) : undefined,
+        length:
+          input.length != null ? new Prisma.Decimal(input.length) : undefined,
+        width:
+          input.width != null ? new Prisma.Decimal(input.width) : undefined,
+        height:
+          input.height != null ? new Prisma.Decimal(input.height) : undefined,
         imageUrl: input.imageUrl,
         productUrl: input.productUrl,
         material: input.material,
@@ -263,7 +303,8 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
         },
       },
       update: {
-        price: input.price != null ? new Prisma.Decimal(input.price) : undefined,
+        price:
+          input.price != null ? new Prisma.Decimal(input.price) : undefined,
         currency: input.currency,
         isActive: input.isActive ?? true,
       },
@@ -273,7 +314,8 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
         country,
         asin,
         listingId,
-        price: input.price != null ? new Prisma.Decimal(input.price) : undefined,
+        price:
+          input.price != null ? new Prisma.Decimal(input.price) : undefined,
         currency: input.currency ?? 'USD',
         isActive: input.isActive ?? true,
       },
@@ -287,7 +329,10 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
     });
     if (!product) return;
 
-    const { periodStart, periodEnd } = normalizeMetricPeriod(input.periodStart, input.periodEnd);
+    const { periodStart, periodEnd } = normalizeMetricPeriod(
+      input.periodStart,
+      input.periodEnd,
+    );
 
     const productChannel = await this.prisma.productChannel.findFirst({
       where: {
@@ -337,14 +382,19 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
     ]);
   }
 
-  async incrementSalesMetric(input: IncrementSalesMetricInput): Promise<boolean> {
+  async incrementSalesMetric(
+    input: IncrementSalesMetricInput,
+  ): Promise<boolean> {
     const product = await this.prisma.product.findUnique({
       where: { sku: input.sku },
       select: { id: true },
     });
     if (!product) return false;
 
-    const { periodStart, periodEnd } = normalizeMetricPeriod(input.periodStart, input.periodEnd);
+    const { periodStart, periodEnd } = normalizeMetricPeriod(
+      input.periodStart,
+      input.periodEnd,
+    );
     const channel = input.channel as SalesChannelType;
     const country = input.country ?? null;
     const revenue = new Prisma.Decimal(input.revenue ?? 0);
@@ -426,36 +476,51 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
     periodEndInput: Date,
     inputs: IncrementSalesMetricInput[],
   ): Promise<ReplaceSalesMetricsForPeriodResult> {
-    const { periodStart, periodEnd } = normalizeMetricPeriod(periodStartInput, periodEndInput);
-    const uniqueSkus = [...new Set(inputs.map((input) => input.sku).filter(Boolean))];
+    const { periodStart, periodEnd } = normalizeMetricPeriod(
+      periodStartInput,
+      periodEndInput,
+    );
+    const uniqueSkus = [
+      ...new Set(inputs.map((input) => input.sku).filter(Boolean)),
+    ];
 
-    const products = uniqueSkus.length > 0
-      ? await this.prisma.product.findMany({
-          where: { sku: { in: uniqueSkus } },
-          select: { id: true, sku: true },
-        })
-      : [];
-    const productBySku = new Map(products.map((product) => [product.sku, product]));
+    const products =
+      uniqueSkus.length > 0
+        ? await this.prisma.product.findMany({
+            where: { sku: { in: uniqueSkus } },
+            select: { id: true, sku: true },
+          })
+        : [];
+    const productBySku = new Map(
+      products.map((product) => [product.sku, product]),
+    );
     const productIds = products.map((product) => product.id);
 
-    const channels = productIds.length > 0
-      ? await this.prisma.productChannel.findMany({
-          where: { productId: { in: productIds } },
-          select: { id: true, productId: true, channel: true, country: true },
-        })
-      : [];
+    const channels =
+      productIds.length > 0
+        ? await this.prisma.productChannel.findMany({
+            where: { productId: { in: productIds } },
+            select: { id: true, productId: true, channel: true, country: true },
+          })
+        : [];
 
     const channelByExactKey = new Map<string, { id: string }>();
     const channelByFallbackKey = new Map<string, { id: string }>();
     for (const channel of channels) {
       const fallbackKey = [channel.productId, channel.channel].join('|');
-      if (!channelByFallbackKey.has(fallbackKey)) channelByFallbackKey.set(fallbackKey, channel);
-      channelByExactKey.set([channel.productId, channel.channel, channel.country ?? ''].join('|'), channel);
+      if (!channelByFallbackKey.has(fallbackKey))
+        channelByFallbackKey.set(fallbackKey, channel);
+      channelByExactKey.set(
+        [channel.productId, channel.channel, channel.country ?? ''].join('|'),
+        channel,
+      );
     }
 
     const days = Math.max(
       1,
-      Math.round((periodEnd.getTime() - periodStart.getTime()) / (24 * 60 * 60 * 1000)),
+      Math.round(
+        (periodEnd.getTime() - periodStart.getTime()) / (24 * 60 * 60 * 1000),
+      ),
     );
     const data: Prisma.ProductSalesMetricCreateManyInput[] = [];
     let skipped = 0;
@@ -522,7 +587,10 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
     };
   }
 
-  async clearSalesMetricsForPeriod(periodStart: Date, periodEnd: Date): Promise<number> {
+  async clearSalesMetricsForPeriod(
+    periodStart: Date,
+    periodEnd: Date,
+  ): Promise<number> {
     const normalized = normalizeMetricPeriod(periodStart, periodEnd);
     const result = await this.prisma.productSalesMetric.deleteMany({
       where: {
@@ -533,16 +601,29 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
     return result.count;
   }
 
-  async updateProduct(sku: string, fields: Partial<UpsertProductInput>): Promise<void> {
+  async updateProduct(
+    sku: string,
+    fields: Partial<UpsertProductInput>,
+  ): Promise<void> {
     const data: Prisma.ProductUpdateInput = {};
     if (fields.title !== undefined) data.title = fields.title;
     if (fields.brand !== undefined) data.brand = fields.brand;
-    if (fields.cost !== undefined) data.cost = fields.cost != null ? new Prisma.Decimal(fields.cost) : null;
+    if (fields.category !== undefined) data.category = fields.category;
+    if (fields.cost !== undefined)
+      data.cost = fields.cost != null ? new Prisma.Decimal(fields.cost) : null;
     if (fields.currency !== undefined) data.currency = fields.currency;
-    if (fields.weight !== undefined) data.weight = fields.weight != null ? new Prisma.Decimal(fields.weight) : null;
-    if (fields.length !== undefined) data.length = fields.length != null ? new Prisma.Decimal(fields.length) : null;
-    if (fields.width !== undefined) data.width = fields.width != null ? new Prisma.Decimal(fields.width) : null;
-    if (fields.height !== undefined) data.height = fields.height != null ? new Prisma.Decimal(fields.height) : null;
+    if (fields.weight !== undefined)
+      data.weight =
+        fields.weight != null ? new Prisma.Decimal(fields.weight) : null;
+    if (fields.length !== undefined)
+      data.length =
+        fields.length != null ? new Prisma.Decimal(fields.length) : null;
+    if (fields.width !== undefined)
+      data.width =
+        fields.width != null ? new Prisma.Decimal(fields.width) : null;
+    if (fields.height !== undefined)
+      data.height =
+        fields.height != null ? new Prisma.Decimal(fields.height) : null;
     if (fields.imageUrl !== undefined) data.imageUrl = fields.imageUrl;
     if (fields.productUrl !== undefined) data.productUrl = fields.productUrl;
     if (fields.material !== undefined) data.material = fields.material;
@@ -552,7 +633,9 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
     await this.prisma.product.update({ where: { sku }, data });
   }
 
-  async deleteProductsNotInSkus(skus: string[]): Promise<DeleteProductsNotInSkuSetResult> {
+  async deleteProductsNotInSkus(
+    skus: string[],
+  ): Promise<DeleteProductsNotInSkuSetResult> {
     const linnworksSkuSet = new Set(skus);
     const localProducts = await this.prisma.product.findMany({
       select: { sku: true },
@@ -577,7 +660,9 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
   // Import batch tracking
   // ---------------------------------------------------------------------------
 
-  async createImportBatch(input: CreateImportBatchInput): Promise<{ id: string }> {
+  async createImportBatch(
+    input: CreateImportBatchInput,
+  ): Promise<{ id: string }> {
     const batch = await this.prisma.skuImportBatch.create({
       data: {
         fileName: input.fileName,
@@ -590,7 +675,10 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
     return { id: batch.id };
   }
 
-  async updateImportBatch(batchId: string, input: UpdateImportBatchInput): Promise<void> {
+  async updateImportBatch(
+    batchId: string,
+    input: UpdateImportBatchInput,
+  ): Promise<void> {
     await this.prisma.skuImportBatch.update({
       where: { id: batchId },
       data: {
@@ -611,7 +699,9 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
         rowNumber: e.rowNumber,
         sku: e.sku,
         reason: e.reason,
-        rawRow: e.rawRow ? (e.rawRow as Prisma.InputJsonValue) : Prisma.JsonNull,
+        rawRow: e.rawRow
+          ? (e.rawRow as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
       })),
       skipDuplicates: true,
     });
@@ -653,7 +743,9 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
   // Dashboard metrics
   // ---------------------------------------------------------------------------
 
-  async getDashboardMetrics(periodDays: number): Promise<DashboardMetricsOutput> {
+  async getDashboardMetrics(
+    periodDays: number,
+  ): Promise<DashboardMetricsOutput> {
     const since = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000);
 
     // 1. Sales velocity per channel
@@ -703,7 +795,10 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
       .slice(-6)
       .map(([key, revenue]) => {
         const [, monthStr] = key.split('-');
-        return { month: MONTH_NAMES[parseInt(monthStr, 10)] ?? key, revenue: Math.round(revenue) };
+        return {
+          month: MONTH_NAMES[parseInt(monthStr, 10)] ?? key,
+          revenue: Math.round(revenue),
+        };
       });
 
     return { salesVelocity, stockDistribution, revenueTrend };
@@ -728,8 +823,14 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
     const alerts: InventoryAlertOutput[] = [];
 
     for (const product of products) {
-      const totalAvailable = product.stock.reduce((sum, s) => sum + s.available, 0);
-      const recentUnits = product.salesMetrics.reduce((sum, m) => sum + m.unitsSold, 0);
+      const totalAvailable = product.stock.reduce(
+        (sum, s) => sum + s.available,
+        0,
+      );
+      const recentUnits = product.salesMetrics.reduce(
+        (sum, m) => sum + m.unitsSold,
+        0,
+      );
 
       if (totalAvailable === 0) {
         alerts.push({
@@ -761,7 +862,8 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
 
     // Sort: HIGH first, then MEDIUM, then LOW
     const order = { HIGH: 0, MEDIUM: 1, LOW: 2 };
-    return alerts.sort((a, b) => order[a.severity] - order[b.severity]).slice(0, 50);
+    return alerts
+      .sort((a, b) => order[a.severity] - order[b.severity])
+      .slice(0, 50);
   }
 }
-

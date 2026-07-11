@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
@@ -7,3 +8,14 @@
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
 }
+=======
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "incremental": false
+  },
+  "include": ["src/**/*.ts", "src/**/*.d.ts"],
+  "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
+}
+>>>>>>> 51b0f3bade6c3722e18a2a14391dbca089dc3a9f

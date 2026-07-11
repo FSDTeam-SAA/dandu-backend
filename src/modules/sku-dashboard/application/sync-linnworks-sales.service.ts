@@ -147,7 +147,7 @@ export class SyncLinnworksSalesService {
 
         if (existing) {
           existing.unitsSold += quantity;
-          existing.revenue += revenue;
+          existing.revenue = (existing.revenue ?? 0) + revenue;
           continue;
         }
 

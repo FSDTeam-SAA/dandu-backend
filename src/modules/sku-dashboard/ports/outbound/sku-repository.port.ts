@@ -5,44 +5,46 @@ import {
   StockLocationType,
 } from '../../domain/models/product.domain';
 
+// ---------------------------------------------------------------------------
+// Browse / filter types
+// ---------------------------------------------------------------------------
+
 export type SkuStockStatusFilter =
   | 'ALL'
   | 'IN_STOCK'
   | 'LOW_STOCK'
   | 'OUT_OF_STOCK';
 
-export interface BrowseSkusQuery {
+export interface SkuBrowseFilters {
   q?: string;
   stockStatus?: SkuStockStatusFilter;
-  channel?: SalesChannelType | 'ALL';
+  channel?:
+    | 'ALL'
+    | 'AMAZON'
+    | 'EBAY'
+    | 'WALMART'
+    | 'SHOPIFY'
+    | 'WEBSITE'
+    | 'OTHER';
   cursor?: string;
-  limit: number;
+  limit?: number;
 }
 
-export interface BrowseSkusResult {
+export interface SkuBrowsePage {
   items: SkuMetricsDomainModel[];
   nextCursor: string | null;
   total: number;
 }
 
-export interface DashboardMetricsResult {
-  salesVelocity: { channel: string; fba: number; mfn: number }[];
-  stockDistribution: { name: string; value: number; fill: string }[];
-  revenueTrend: { month: string; revenue: number }[];
-}
-
-export interface InventoryAlertResult {
-  sku: string;
-  title: string;
-  type: 'DEAD_STOCK' | 'AGED_STOCK' | 'CRITICAL_LOW' | 'OUT_OF_STOCK';
-  detail: string;
-  severity: 'HIGH' | 'MEDIUM' | 'LOW';
-}
+// ---------------------------------------------------------------------------
+// Upsert types (individual)
+// ---------------------------------------------------------------------------
 
 export interface UpsertProductInput {
   sku: string;
   title: string;
   brand?: string | null;
+  category?: string | null;
   status?: ProductStatus;
   cost?: number | null;
   currency?: string;
@@ -52,23 +54,26 @@ export interface UpsertProductInput {
   height?: number | null;
   imageUrl?: string | null;
   productUrl?: string | null;
+  material?: string | null;
+  thickness?: string | null;
+  packQty?: number | null;
   lastSyncedAt?: Date;
 }
 
 export interface UpsertStockInput {
   sku: string;
   country: string;
-  locationType: StockLocationType;
+  locationType: StockLocationType | 'FBA' | 'FBM' | 'WAREHOUSE' | 'THIRD_PARTY';
   warehouse?: string | null;
-  quantity: number;
-  reserved: number;
-  inbound: number;
+  quantity?: number;
+  reserved?: number;
+  inbound?: number;
   available: number;
 }
 
 export interface UpsertChannelInput {
   sku: string;
-  channel: SalesChannelType;
+  channel: SalesChannelType | 'AMAZON' | 'EBAY' | 'WALMART' | 'SHOPIFY' | 'WEBSITE' | 'OTHER';
   country?: string | null;
   asin?: string | null;
   listingId?: string | null;
@@ -79,13 +84,45 @@ export interface UpsertChannelInput {
 
 export interface UpsertSalesMetricInput {
   sku: string;
-  channel: SalesChannelType;
+  channel: SalesChannelType | 'AMAZON' | 'EBAY' | 'WALMART' | 'SHOPIFY' | 'WEBSITE' | 'OTHER';
   country?: string | null;
   periodStart: Date;
   periodEnd: Date;
   unitsSold: number;
-  revenue: number;
+  revenue?: number;
+  velocity?: number | null;
   currency?: string;
+}
+
+export interface IncrementSalesMetricInput extends UpsertSalesMetricInput {}
+
+// ---------------------------------------------------------------------------
+// Replace / result types
+// ---------------------------------------------------------------------------
+
+export interface ReplaceSalesMetricsForPeriodResult {
+  cleared: number;
+  created: number;
+  skipped: number;
+}
+
+export interface DeleteProductsNotInSkuSetResult {
+  deleted: number;
+  remaining: number;
+}
+
+// ---------------------------------------------------------------------------
+// Sync log types
+// ---------------------------------------------------------------------------
+
+export interface CreateSyncLogInput {
+  provider: string;
+  processedRows: number;
+  failedRows: number;
+  status: 'SUCCESS' | 'PARTIAL_SUCCESS' | 'FAILED';
+  errorMessage?: string;
+  metadata?: Record<string, unknown>;
+  durationMs: number;
 }
 
 export interface SyncLogInput {
@@ -123,114 +160,6 @@ export interface ImportRowErrorInput {
 }
 
 // ---------------------------------------------------------------------------
-// Upsert types
-// ---------------------------------------------------------------------------
-
-export interface UpsertProductInput {
-  sku: string;
-  title: string;
-  brand?: string | null;
-  category?: string | null;
-  cost?: number | null;
-  currency?: string;
-  weight?: number | null;
-  length?: number | null;
-  width?: number | null;
-  height?: number | null;
-  imageUrl?: string | null;
-  productUrl?: string | null;
-  material?: string | null;
-  thickness?: string | null;
-  packQty?: number | null;
-}
-
-export interface UpsertStockInput {
-  sku: string;
-  country: string;
-  locationType: 'FBA' | 'FBM' | 'WAREHOUSE' | 'THIRD_PARTY';
-  warehouse?: string | null;
-  quantity?: number;
-  reserved?: number;
-  inbound?: number;
-  available: number;
-}
-
-export interface UpsertChannelInput {
-  sku: string;
-  channel: 'AMAZON' | 'EBAY' | 'WALMART' | 'SHOPIFY' | 'WEBSITE' | 'OTHER';
-  country?: string | null;
-  asin?: string | null;
-  listingId?: string | null;
-  price?: number | null;
-  currency?: string;
-  isActive?: boolean;
-}
-
-export interface UpsertSalesMetricInput {
-  sku: string;
-  channel: 'AMAZON' | 'EBAY' | 'WALMART' | 'SHOPIFY' | 'WEBSITE' | 'OTHER';
-  country?: string | null;
-  periodStart: Date;
-  periodEnd: Date;
-  unitsSold: number;
-  revenue?: number;
-  velocity?: number | null;
-  currency?: string;
-}
-
-export interface IncrementSalesMetricInput extends UpsertSalesMetricInput {}
-
-export interface ReplaceSalesMetricsForPeriodResult {
-  cleared: number;
-  created: number;
-  skipped: number;
-}
-
-export interface DeleteProductsNotInSkuSetResult {
-  deleted: number;
-  remaining: number;
-}
-
-// ---------------------------------------------------------------------------
-// Browse / filter types
-// ---------------------------------------------------------------------------
-
-export interface SkuBrowseFilters {
-  q?: string;
-  stockStatus?: 'ALL' | 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
-  channel?:
-    | 'ALL'
-    | 'AMAZON'
-    | 'EBAY'
-    | 'WALMART'
-    | 'SHOPIFY'
-    | 'WEBSITE'
-    | 'OTHER';
-  cursor?: string;
-  limit?: number;
-}
-
-export interface SkuBrowsePage {
-  items: SkuMetricsDomainModel[];
-  nextCursor: string | null;
-  total: number;
-}
-
-// ---------------------------------------------------------------------------
-// Sync log types
-// ---------------------------------------------------------------------------
-
-export interface CreateSyncLogInput {
-  provider: string;
-  processedRows: number;
-  failedRows: number;
-  status: 'SUCCESS' | 'PARTIAL_SUCCESS' | 'FAILED';
-  errorMessage?: string;
-  metadata?: Record<string, unknown>;
-  durationMs: number;
-}
-
-// ---------------------------------------------------------------------------
 // Dashboard & alerts
 // ---------------------------------------------------------------------------
 
@@ -255,12 +184,11 @@ export interface InventoryAlertOutput {
 export interface ISkuRepository {
   // Single SKU lookup
   findMetricsBySku(sku: string): Promise<SkuMetricsDomainModel | null>;
-<<<<<<< HEAD
 
   // Browsing
   browseSkus(filters: SkuBrowseFilters): Promise<SkuBrowsePage>;
 
-  // Upsert operations (used by CSV import and Linnworks sync)
+  // Individual upsert operations (used by CSV import and Linnworks sync)
   upsertProduct(input: UpsertProductInput): Promise<{ id: string }>;
   upsertStock(input: UpsertStockInput): Promise<void>;
   upsertChannel(input: UpsertChannelInput): Promise<void>;
@@ -275,6 +203,12 @@ export interface ISkuRepository {
     periodStart: Date,
     periodEnd: Date,
   ): Promise<number>;
+
+  // Batch upsert operations (used by BullMQ-based sync)
+  upsertProducts(products: UpsertProductInput[]): Promise<number>;
+  upsertStockBatch(stockRows: UpsertStockInput[]): Promise<number>;
+  upsertChannels(channels: UpsertChannelInput[]): Promise<number>;
+  replaceSalesMetrics(metrics: UpsertSalesMetricInput[]): Promise<number>;
 
   // Update mutable product fields
   updateProduct(
@@ -295,6 +229,8 @@ export interface ISkuRepository {
 
   // Sync log
   createSyncLog(input: CreateSyncLogInput): Promise<void>;
+  createSyncLogV2(input: SyncLogInput): Promise<string>;
+  updateSyncLog(id: string, input: SyncLogInput): Promise<void>;
   findLastSuccessfulSync(provider: string): Promise<Date | null>;
 
   // Dashboard aggregations
@@ -302,18 +238,6 @@ export interface ISkuRepository {
 
   // Inventory alerts
   getInventoryAlerts(): Promise<InventoryAlertOutput[]>;
-=======
-  browseSkus(query: BrowseSkusQuery): Promise<BrowseSkusResult>;
-  getDashboardMetrics(periodDays: number): Promise<DashboardMetricsResult>;
-  getInventoryAlerts(): Promise<InventoryAlertResult[]>;
-  upsertProducts(products: UpsertProductInput[]): Promise<number>;
-  upsertStock(stock: UpsertStockInput[]): Promise<number>;
-  upsertChannels(channels: UpsertChannelInput[]): Promise<number>;
-  replaceSalesMetrics(metrics: UpsertSalesMetricInput[]): Promise<number>;
-  createSyncLog(input: SyncLogInput): Promise<string>;
-  updateSyncLog(id: string, input: SyncLogInput): Promise<void>;
-  updateProduct(sku: string, data: Partial<UpsertProductInput>): Promise<void>;
->>>>>>> 51b0f3bade6c3722e18a2a14391dbca089dc3a9f
 }
 
 export const SKU_REPOSITORY_TOKEN = Symbol('ISkuRepository');

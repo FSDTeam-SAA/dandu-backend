@@ -60,7 +60,7 @@ export class SyncLinnworksCatalogService {
     );
 
     const productCount = await this.skuRepository.upsertProducts(products);
-    const stockCount = await this.skuRepository.upsertStock(stock);
+    const stockCount = await this.skuRepository.upsertStockBatch(stock);
     const channelCount = await this.skuRepository.upsertChannels(channels);
 
     return {

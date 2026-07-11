@@ -1,56 +1,3 @@
-<<<<<<< HEAD
-import 'dotenv/config';
-
-interface AppConfig {
-  jwt_access_secret: string;
-  jwt_refresh_secret: string;
-  redis_cache_key_prefix: string;
-  rate_limit_enabled: boolean;
-  node_env: string;
-  port: number;
-  email_host: string;
-  email_port: number;
-  email_user: string;
-  email_pass: string;
-  email_from: string;
-  // Google OAuth
-  google_client_id: string;
-  google_client_secret: string;
-  google_redirect_uri: string;
-  cors_origins: string[];
-}
-
-const parseCsv = (value?: string): string[] =>
-  value
-    ? value
-        .split(',')
-        .map((item) => item.trim())
-        .filter(Boolean)
-    : [];
-
-const config: AppConfig = {
-  jwt_access_secret:
-    process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || '',
-  jwt_refresh_secret:
-    process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET || '',
-  redis_cache_key_prefix: process.env.REDIS_CACHE_KEY_PREFIX || 'app',
-  rate_limit_enabled: process.env.RATE_LIMIT_ENABLED !== 'false',
-  node_env: process.env.NODE_ENV || 'development',
-  port: parseInt(process.env.PORT || '5000', 10),
-  email_host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-  email_port: parseInt(process.env.EMAIL_PORT || '587', 10),
-  email_user: process.env.EMAIL_USER || '',
-  email_pass: process.env.EMAIL_PASS || '',
-  email_from: process.env.EMAIL_FROM || process.env.EMAIL_USER || '',
-  // Google OAuth
-  google_client_id: process.env.GOOGLE_CLIENT_ID || '',
-  google_client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
-  google_redirect_uri: process.env.GOOGLE_REDIRECT_URI || '',
-  cors_origins: parseCsv(process.env.CORS_ORIGINS),
-};
-
-export default config;
-=======
 import 'dotenv/config';
 
 interface AppConfig {
@@ -160,8 +107,7 @@ const config: AppConfig = {
     process.env.LINNWORKS_RATE_LIMIT_PER_MINUTE || '145',
     10,
   ),
-  linnworks_daily_sync_cron: process.env.LINNWORKS_DAILY_SYNC_CRON || '0 3 * * *',
+  linnworks_daily_sync_cron: process.env.LINNWORKS_DAILY_SYNC_CRON || '0 0 * * *',
 };
 
 export default config;
->>>>>>> 51b0f3bade6c3722e18a2a14391dbca089dc3a9f

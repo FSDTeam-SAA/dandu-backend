@@ -1,5 +1,5 @@
 import AppError from '../../../common/errors/app.error';
-import { SkuMetricsDomainModel } from '../domain/models/product.domain';
+import { SkuMetricsDomainModel, normalizeSku } from '../domain/models/product.domain';
 import { IGetSkuMetricsUseCase } from '../ports/inbound/get-sku-metrics.usecase';
 import { ISkuRepository } from '../ports/outbound/sku-repository.port';
 
@@ -7,7 +7,7 @@ export class GetSkuMetricsService implements IGetSkuMetricsUseCase {
   constructor(private readonly skuRepository: ISkuRepository) {}
 
   async execute(sku: string): Promise<SkuMetricsDomainModel> {
-    const normalizedSku = sku.trim();
+    const normalizedSku = normalizeSku(sku.trim());
     if (!normalizedSku) {
       throw AppError.badRequest('SKU is required');
     }

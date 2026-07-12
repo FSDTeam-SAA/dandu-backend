@@ -107,7 +107,7 @@ const config: AppConfig = {
     process.env.LINNWORKS_RATE_LIMIT_PER_MINUTE || '145',
     10,
   ),
-  linnworks_daily_sync_cron: process.env.LINNWORKS_DAILY_SYNC_CRON || '0 3 * * *',
+  linnworks_daily_sync_cron: process.env.LINNWORKS_DAILY_SYNC_CRON || '0 0 * * *',
 };
 
 export default config;

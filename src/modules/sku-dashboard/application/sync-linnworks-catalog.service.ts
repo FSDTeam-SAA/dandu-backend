@@ -1,6 +1,7 @@
 import {
   SalesChannelType,
   StockLocationType,
+  normalizeSku,
 } from '../domain/models/product.domain';
 import {
   ILinnworksClient,
@@ -60,7 +61,7 @@ export class SyncLinnworksCatalogService {
     );
 
     const productCount = await this.skuRepository.upsertProducts(products);
-    const stockCount = await this.skuRepository.upsertStock(stock);
+    const stockCount = await this.skuRepository.upsertStockBatch(stock);
     const channelCount = await this.skuRepository.upsertChannels(channels);
 
     return {
@@ -103,7 +104,7 @@ export class SyncLinnworksCatalogService {
       item.Images?.find((image) => image.IsMain) || item.Images?.[0] || null;
 
     return {
-      sku: item.ItemNumber || '',
+      sku: normalizeSku(item.ItemNumber || ''),
       title: item.ItemTitle || item.ItemNumber || 'Untitled Linnworks item',
       status: 'ACTIVE',
       cost: item.PurchasePrice ?? null,
@@ -118,7 +119,7 @@ export class SyncLinnworksCatalogService {
   }
 
   private toStockRows(item: LinnworksStockItem): UpsertStockInput[] {
-    const sku = item.ItemNumber || '';
+    const sku = normalizeSku(item.ItemNumber || '');
 
     return (item.StockLevels || []).map((level) => {
       const location = level.Location;
@@ -144,7 +145,7 @@ export class SyncLinnworksCatalogService {
     channelSkuRows: LinnworksChannelSku[],
   ): UpsertChannelInput[] {
     const rows = new Map<string, UpsertChannelInput>();
-    const sku = item.ItemNumber || '';
+    const sku = normalizeSku(item.ItemNumber || '');
 
     for (const price of item.ItemChannelPrices || []) {
       const channel = this.toSalesChannel(price.Source);

@@ -1,4 +1,4 @@
-import { SalesChannelType } from '../domain/models/product.domain';
+import { SalesChannelType, normalizeSku } from '../domain/models/product.domain';
 import {
   ILinnworksClient,
   LinnworksOrderItem,
@@ -20,6 +20,7 @@ interface OrderContext {
   channel: SalesChannelType;
   country: string | null;
   currency: string;
+  fulfillmentType: string;
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -103,6 +104,13 @@ export class SyncLinnworksSalesService {
     for (const order of orders) {
       if (!order.pkOrderID) continue;
 
+      const subSource = order.SubSource ?? '';
+      const subSourceUpper = subSource.toUpperCase();
+      const fulfillmentType =
+        subSourceUpper.includes('FBA') ? 'FBA' :
+        subSourceUpper.includes('FBM') || subSourceUpper.includes('MFN') ? 'MFN' :
+        'ALL';
+
       contexts.set(order.pkOrderID, {
         processedAt: new Date(
           order.dProcessedOn || order.dReceivedDate || new Date().toISOString(),
@@ -110,6 +118,7 @@ export class SyncLinnworksSalesService {
         channel: this.toSalesChannel(order.Source),
         country: order.cCountry || null,
         currency: order.cCurrency || 'USD',
+        fulfillmentType,
       });
     }
 
@@ -126,7 +135,7 @@ export class SyncLinnworksSalesService {
     for (const item of orderItems) {
       const orderId = item.fkOrderID || item.OrderId;
       const context = orderId ? contexts.get(orderId) : null;
-      const sku = item.SKU || item.ItemNumber;
+      const sku = normalizeSku(item.SKU || item.ItemNumber || '');
       if (!context || !sku) continue;
 
       const quantity = item.Quantity ?? item.nQty ?? 0;
@@ -141,13 +150,14 @@ export class SyncLinnworksSalesService {
           sku,
           context.channel,
           context.country || '',
+          context.fulfillmentType,
           days,
         ].join(':');
         const existing = buckets.get(key);
 
         if (existing) {
           existing.unitsSold += quantity;
-          existing.revenue += revenue;
+          existing.revenue = (existing.revenue ?? 0) + revenue;
           continue;
         }
 
@@ -155,6 +165,7 @@ export class SyncLinnworksSalesService {
           sku,
           channel: context.channel,
           country: context.country,
+          fulfillmentType: context.fulfillmentType as any,
           periodStart: windowStart,
           periodEnd,
           unitsSold: quantity,

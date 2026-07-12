@@ -1,23 +1,17 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import {
-  SKU_REPOSITORY_TOKEN,
-} from '../ports/outbound/sku-repository.port';
-import type { ISkuRepository } from '../ports/outbound/sku-repository.port';
-import { UpdateProductDto } from '../dto/update-product.dto';
+import AppError from '../../../common/errors/app.error';
+import { normalizeSku } from '../domain/models/product.domain';
+import { ISkuRepository, UpsertProductInput } from '../ports/outbound/sku-repository.port';
 
-@Injectable()
 export class UpdateProductService {
-  constructor(
-    @Inject(SKU_REPOSITORY_TOKEN)
-    private readonly skuRepository: ISkuRepository,
-  ) {}
+  constructor(private readonly skuRepository: ISkuRepository) {}
 
-  async execute(sku: string, dto: UpdateProductDto): Promise<void> {
-    const existing = await this.skuRepository.findMetricsBySku(sku);
-    if (!existing) {
-      throw new NotFoundException(`Product with SKU ${sku} not found`);
-    }
+  async execute(sku: string, fields: Partial<UpsertProductInput>): Promise<void> {
+    const normalized = normalizeSku(sku.trim());
+    if (!normalized) throw AppError.badRequest('SKU is required');
 
-    await this.skuRepository.updateProduct(sku, dto);
+    const existing = await this.skuRepository.findMetricsBySku(normalized);
+    if (!existing) throw AppError.notFound(`SKU not found: ${normalized}`);
+
+    await this.skuRepository.updateProduct(normalized, fields);
   }
 }

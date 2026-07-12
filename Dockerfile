@@ -80,7 +80,9 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
+COPY prisma.config.ts ./
 COPY prisma ./prisma/
+COPY scripts ./scripts/
 
 RUN npm ci
 
@@ -103,4 +105,4 @@ COPY package*.json ./
 ENV NODE_ENV=production
 
 EXPOSE 5000
-CMD ["node", "dist/src/main.js"]
+CMD ["node", "dist/main.js"]

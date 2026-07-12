@@ -1,5 +1,11 @@
 node_modules
-Dockerfile
-docker-compose.yaml
+npm-debug.log*
+coverage
+dist
 .git
-.gitignore
+.env
+.env.*
+!.env.example
+Dockerfile
+docker-compose*.yaml
+README.md

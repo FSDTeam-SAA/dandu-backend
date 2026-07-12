@@ -28,7 +28,7 @@ export class RunLinnworksDailySyncService {
 
   async execute(): Promise<LinnworksSyncResult> {
     const startedAt = Date.now();
-    const logId = await this.skuRepository.createSyncLog({
+    const logId = await this.skuRepository.createSyncLogV2({
       provider: 'LINNWORKS',
       status: 'PARTIAL_SUCCESS',
       metadata: { state: 'RUNNING' },

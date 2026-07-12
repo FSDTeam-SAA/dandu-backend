@@ -192,13 +192,6 @@ export class AuthController {
   // Google OAuth Endpoints
   // ==========================================
 
-  /**
-   * Initiate Google OAuth flow
-   * Returns the Google authorization URL for the client to redirect to
-   *
-   * @example GET /auth/google
-   * @example GET /auth/google?redirectUrl=http://localhost:3000/dashboard
-   */
   @Get('google')
   @ApiOperation({ summary: 'Initiate Google OAuth flow' })
   @ApiResponse({
@@ -226,13 +219,6 @@ export class AuthController {
     };
   }
 
-  /**
-   * Google OAuth callback handler
-   * This endpoint is called by Google after user authentication
-   *
-   * For browser-based flows, this redirects to the frontend
-   * For API-based flows, returns JSON with tokens
-   */
   @Get('google/callback')
   async googleOAuthCallback(
     @Query('code') code: string,
@@ -243,7 +229,6 @@ export class AuthController {
 
     @Res({ passthrough: true }) res: Response,
   ) {
-    // Handle OAuth errors
     if (error) {
       this.customLogger.warn(
         `Google OAuth error: ${error} - ${errorDescription}`,
@@ -254,7 +239,6 @@ export class AuthController {
         'AuthController',
       );
 
-      // For browser redirect, you might want to redirect to an error page
       return {
         success: false,
         error,
@@ -280,8 +264,6 @@ export class AuthController {
       meta,
     );
 
-    // If redirectUrl is provided, put tokens in the fragment so they are not
-    // sent back to servers in request URLs or Referer headers.
     if (result.redirectUrl) {
       const redirectUrl = new URL(result.redirectUrl);
       redirectUrl.hash = new URLSearchParams({
@@ -295,7 +277,6 @@ export class AuthController {
       return res.redirect(redirectUrl.toString());
     }
 
-    // Otherwise return JSON response
     return {
       success: true,
       message: result.isNewUser
@@ -305,10 +286,6 @@ export class AuthController {
     };
   }
 
-  /**
-   * Alternative POST endpoint for Google OAuth callback
-   * Useful for mobile apps or SPAs that handle the callback differently
-   */
   @Post('google/callback')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -343,10 +320,6 @@ export class AuthController {
   // Login/Logout Endpoints
   // ==========================================
 
-  /**
-   * Login with email and password
-   */
-  // Strict rate limit for login: 5 requests per 15 minutes per IP
   @Throttle({ default: THROTTLER_CONFIG.AUTH })
   @Post('login')
   @HttpCode(HttpStatus.OK)
@@ -368,9 +341,6 @@ export class AuthController {
     };
   }
 
-  /**
-   * Refresh access token using refresh token
-   */
   @Post('refresh-token')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh access token' })
@@ -414,9 +384,6 @@ export class AuthController {
     );
   }
 
-  /**
-   * Logout current session
-   */
   @UseGuards(AuthGuard)
   @Post('logout')
   @HttpCode(HttpStatus.OK)
@@ -440,9 +407,6 @@ export class AuthController {
     };
   }
 
-  /**
-   * Logout from all devices
-   */
   @UseGuards(AuthGuard)
   @Post('logout-all')
   @HttpCode(HttpStatus.OK)

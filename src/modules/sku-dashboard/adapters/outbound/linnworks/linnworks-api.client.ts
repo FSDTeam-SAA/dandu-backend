@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { normalizeSku } from '../../../domain/models/product.domain';
 import { LinnworksConfig } from './linnworks.config';
 
 /**
@@ -147,6 +148,7 @@ export interface LinnworksSalesMetric {
   channelSource: string;
   subSource?: string;
   country?: string | null;
+  fulfillmentType?: string;
   periodStart: Date;
   periodEnd: Date;
   unitsSold: number;
@@ -334,7 +336,7 @@ export class LinnworksApiClient {
       ]);
       if (!resolvedOrderId) return;
 
-      const sku = readFirstString(item, ['SKU', 'Sku', 'sku', 'ItemNumber', 'itemNumber', 'ItemSku', 'itemSku']);
+      const sku = normalizeSku(readFirstString(item, ['SKU', 'Sku', 'sku', 'ItemNumber', 'itemNumber', 'ItemSku', 'itemSku']) ?? '');
       const quantity = readFirstNumber(item, ['Quantity', 'quantity', 'Qty', 'qty', 'nQty']);
       if (!sku || !quantity || quantity <= 0) return;
 
@@ -342,7 +344,7 @@ export class LinnworksApiClient {
         ...(item as LinnworksOrderItem),
         pkOrderID: resolvedOrderId,
         SKU: sku,
-        ItemNumber: readFirstString(item, ['ItemNumber', 'itemNumber']) ?? sku,
+        ItemNumber: normalizeSku(readFirstString(item, ['ItemNumber', 'itemNumber']) ?? sku),
         Quantity: quantity,
         PricePerUnit: readFirstNumber(item, ['PricePerUnit', 'pricePerUnit', 'Price', 'price', 'UnitPrice', 'unitPrice']),
       };
@@ -727,7 +729,7 @@ export class LinnworksApiClient {
       country?: string | null,
       currency?: string,
     ) => {
-      const sku = item.SKU || item.ItemNumber;
+      const sku = normalizeSku(item.SKU || item.ItemNumber || '');
       if (!sku) return;
 
       const quantity = Math.max(0, Math.round(Number(item.Quantity ?? 0)));
@@ -744,6 +746,13 @@ export class LinnworksApiClient {
           ? item.Cost
           : Number(item.PricePerUnit ?? 0) * quantity;
 
+      // Classify fulfillment type from SubSource
+      const subSourceUpper = (subSource ?? '').toUpperCase();
+      const fulfillmentType =
+        subSourceUpper.includes('FBA') ? 'FBA' :
+        subSourceUpper.includes('FBM') || subSourceUpper.includes('MFN') ? 'MFN' :
+        'ALL';
+
       for (const period of periods) {
         if (orderDate < period.periodStart || orderDate > period.periodEnd) continue;
 
@@ -753,6 +762,7 @@ export class LinnworksApiClient {
           subSource ?? '',
           country ?? '',
           currency ?? '',
+          fulfillmentType,
           period.days,
         ].join('|');
 
@@ -761,6 +771,7 @@ export class LinnworksApiClient {
           channelSource,
           subSource,
           country,
+          fulfillmentType,
           periodStart: period.periodStart,
           periodEnd: period.periodEnd,
           unitsSold: 0,

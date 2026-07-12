@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import AppError from '../../../common/errors/app.error';
+import { normalizeSku } from '../domain/models/product.domain';
 import {
   ImportReportCommand,
   ImportReportResult,
@@ -240,7 +241,7 @@ export class ImportReportService implements IImportReportUseCase {
     }> = [];
 
     for (const row of rows) {
-      const sku = resolve(row.values, 'sku');
+      const sku = normalizeSku(resolve(row.values, 'sku'));
       if (!sku) {
         failedRows++;
         rowErrors.push({
@@ -332,6 +333,8 @@ export class ImportReportService implements IImportReportUseCase {
           parseNum(resolve(row.values, 'price')) ??
           parseNum(resolve(row.values, 'fbaPrice')) ??
           parseNum(resolve(row.values, 'mfnPrice'));
+        const fbaPriceVal = parseNum(resolve(row.values, 'fbaPrice'));
+        const mfnPriceVal = parseNum(resolve(row.values, 'mfnPrice'));
         if (channelRaw || asin || listingId || price !== null) {
           const channelInput: UpsertChannelInput = {
             sku,
@@ -340,6 +343,8 @@ export class ImportReportService implements IImportReportUseCase {
             asin,
             listingId,
             price,
+            fbaPrice: fbaPriceVal ?? undefined,
+            mfnPrice: mfnPriceVal ?? undefined,
             currency: 'USD',
             isActive: true,
           };

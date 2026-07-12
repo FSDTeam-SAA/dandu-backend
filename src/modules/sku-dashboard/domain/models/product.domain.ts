@@ -12,6 +12,18 @@ export type SalesChannelType =
   | 'SHOPIFY'
   | 'WEBSITE'
   | 'OTHER';
+export type FulfillmentType = 'FBA' | 'MFN' | 'ALL';
+
+/**
+ * Normalize SKU by stripping FBA/FBM/MFN fulfillment suffixes.
+ * e.g. "2023151DCAFBA" → "2023151D", "2023151DUSFBA" → "2023151D"
+ * Handles patterns: {base}{country}{fulfillment} where country is 2-letter code
+ * and fulfillment is FBA, FBM, or MFN.
+ */
+export function normalizeSku(sku: string): string {
+  if (!sku) return sku;
+  return sku.replace(/(USFBA|CAFBA|USFBM|CAFBM|FBA|FBM|MFN)$/i, '').trim();
+}
 
 export interface ProductDomainModel {
   id: string;
@@ -62,6 +74,8 @@ export interface ProductChannelDomainModel {
   asin: string | null;
   listingId: string | null;
   price: number | null;
+  fbaPrice: number | null;
+  mfnPrice: number | null;
   currency: string;
   isActive: boolean;
   updatedAt: Date;
@@ -73,6 +87,7 @@ export interface ProductSalesMetricDomainModel {
   productChannelId: string | null;
   channel: SalesChannelType;
   country: string | null;
+  fulfillmentType: FulfillmentType;
   periodStart: Date;
   periodEnd: Date;
   unitsSold: number;

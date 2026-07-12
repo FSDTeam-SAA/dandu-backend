@@ -5,6 +5,7 @@ import {
   LinnworksOrderItem,
   LinnworksProcessedOrderSummary,
 } from '../adapters/outbound/linnworks/linnworks-api.client';
+import { normalizeSku } from '../domain/models/product.domain';
 import { ISkuRepository, IncrementSalesMetricInput } from '../ports/outbound/sku-repository.port';
 
 type ChannelType = 'AMAZON' | 'EBAY' | 'WALMART' | 'SHOPIFY' | 'WEBSITE' | 'OTHER';
@@ -160,7 +161,7 @@ function collectMetricInputs(
   periodEnd: Date,
   bucket: Map<string, IncrementSalesMetricInput>,
 ) {
-  const sku = item.SKU || item.ItemNumber;
+  const sku = normalizeSku(item.SKU || item.ItemNumber || '');
   if (!sku) return;
 
   const quantity = Math.max(0, Math.round(Number(item.Quantity ?? 0)));
@@ -171,11 +172,19 @@ function collectMetricInputs(
   const channel = mapChannelSource(channelSource, order.SubSource);
   const currency = 'USD';
   const revenue = Number(item.PricePerUnit ?? 0) * quantity;
-  const key = [sku, channel, country ?? '', currency].join('|');
+
+  const subSourceUpper = (order.SubSource ?? '').toUpperCase();
+  const fulfillmentType =
+    subSourceUpper.includes('FBA') ? 'FBA' :
+    subSourceUpper.includes('FBM') || subSourceUpper.includes('MFN') ? 'MFN' :
+    'ALL';
+
+  const key = [sku, channel, country ?? '', fulfillmentType, currency].join('|');
   const existing = bucket.get(key) ?? {
     sku,
     channel,
     country,
+    fulfillmentType,
     periodStart,
     periodEnd,
     unitsSold: 0,

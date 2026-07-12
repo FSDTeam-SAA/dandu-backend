@@ -15,11 +15,14 @@ import {
   extractCountryFromLocation,
   extractCountryFromSubSource,
   findChannelPrice,
+  findFbaPrice,
+  findMfnPrice,
   mapChannelSource,
   mapLocationType,
   parseNullableNumber,
   readExtendedProperty,
 } from './linnworks-sync.service';
+import { normalizeSku } from '../domain/models/product.domain';
 
 export interface InventoryRefreshResult {
   status: 'COMPLETED' | 'FAILED';
@@ -56,18 +59,18 @@ export class LinnworksInventoryRefreshService {
       const stockItems: LinnworksStockItem[] =
         await this.linnworksClient.getAllStockItems();
       const remainingSkus = [
-        ...new Set(stockItems.map((item) => item.ItemNumber).filter(Boolean)),
+        ...new Set(stockItems.map((item) => normalizeSku(item.ItemNumber)).filter(Boolean)),
       ];
       const idToSku = new Map<string, string>();
 
       for (const item of stockItems) {
         if (!item.ItemNumber) continue;
-        idToSku.set(item.StockItemId, item.ItemNumber);
+        idToSku.set(item.StockItemId, normalizeSku(item.ItemNumber));
 
         const mainImage =
           item.Images?.find((img) => img.IsMain) ?? item.Images?.[0];
         const productInput: UpsertProductInput = {
-          sku: item.ItemNumber,
+          sku: normalizeSku(item.ItemNumber),
           title: item.ItemTitle ?? item.ItemNumber,
           brand: null,
           category: item.CategoryName ?? null,
@@ -160,7 +163,7 @@ export class LinnworksInventoryRefreshService {
           .catch(() => []);
 
       for (const listing of channelListings) {
-        const sku = idToSku.get(listing.StockItemId) ?? listing.SKU;
+        const sku = idToSku.get(listing.StockItemId) ?? normalizeSku(listing.SKU);
         if (!sku) continue;
 
         const stockItem = stockItems.find(
@@ -171,6 +174,14 @@ export class LinnworksInventoryRefreshService {
           listing.Source,
           listing.SubSource,
         );
+        const fbaPrice = findFbaPrice(
+          stockItem?.ItemChannelPrices,
+          listing.Source,
+        );
+        const mfnPrice = findMfnPrice(
+          stockItem?.ItemChannelPrices,
+          listing.Source,
+        );
         const channelInput: UpsertChannelInput = {
           sku,
           channel: mapChannelSource(listing.Source, listing.SubSource),
@@ -179,6 +190,8 @@ export class LinnworksInventoryRefreshService {
           listingId: listing.ListingId ?? listing.ChannelSKURowId ?? null,
           price:
             listing.Price ?? channelPrice ?? stockItem?.RetailPrice ?? null,
+          fbaPrice: fbaPrice ?? undefined,
+          mfnPrice: mfnPrice ?? undefined,
           currency: 'USD',
           isActive: true,
         };

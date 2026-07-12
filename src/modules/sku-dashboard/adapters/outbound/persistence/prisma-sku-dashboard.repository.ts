@@ -121,7 +121,7 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
     // Base where clause
     const where: Prisma.ProductWhereInput = {};
 
-    // Full-text search on SKU / title — non-contiguous word matching
+    // Full-text search on SKU / title / brand / category / material — non-contiguous word matching
     // e.g. "3 pack acrylic frame" finds titles containing all four words in any order
     if (q && q.trim()) {
       const words = q.trim().split(/\s+/).filter(Boolean);
@@ -129,12 +129,18 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
         where.OR = [
           { sku: { contains: words[0] } },
           { title: { contains: words[0] } },
+          { brand: { contains: words[0] } },
+          { category: { contains: words[0] } },
+          { material: { contains: words[0] } },
         ];
       } else {
         where.AND = words.map((word) => ({
           OR: [
             { sku: { contains: word } },
             { title: { contains: word } },
+            { brand: { contains: word } },
+            { category: { contains: word } },
+            { material: { contains: word } },
           ],
         }));
       }
@@ -316,6 +322,10 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
       update: {
         price:
           input.price != null ? new Prisma.Decimal(input.price) : undefined,
+        fbaPrice:
+          input.fbaPrice != null ? new Prisma.Decimal(input.fbaPrice) : undefined,
+        mfnPrice:
+          input.mfnPrice != null ? new Prisma.Decimal(input.mfnPrice) : undefined,
         currency: input.currency,
         isActive: input.isActive ?? true,
       },
@@ -327,6 +337,10 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
         listingId,
         price:
           input.price != null ? new Prisma.Decimal(input.price) : undefined,
+        fbaPrice:
+          input.fbaPrice != null ? new Prisma.Decimal(input.fbaPrice) : undefined,
+        mfnPrice:
+          input.mfnPrice != null ? new Prisma.Decimal(input.mfnPrice) : undefined,
         currency: input.currency ?? 'USD',
         isActive: input.isActive ?? true,
       },
@@ -354,12 +368,15 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
       select: { id: true },
     });
 
+    const fulfillmentType = (input.fulfillmentType as any) ?? 'ALL';
+
     await this.prisma.$transaction([
       this.prisma.productSalesMetric.deleteMany({
         where: {
           productId: product.id,
           channel: input.channel as SalesChannelType,
           country: input.country ?? null,
+          fulfillmentType,
           periodStart,
           periodEnd,
         },
@@ -370,6 +387,7 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
           productChannelId: productChannel?.id,
           channel: input.channel as SalesChannelType,
           country: input.country,
+          fulfillmentType,
           periodStart,
           periodEnd,
           unitsSold: input.unitsSold,
@@ -971,17 +989,18 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
   ): Promise<DashboardMetricsOutput> {
     const since = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000);
 
-    // 1. Sales velocity per channel
+    // 1. Sales velocity per channel and fulfillment type
     const salesAgg = await this.prisma.productSalesMetric.groupBy({
-      by: ['channel'],
+      by: ['channel', 'fulfillmentType'],
       where: { periodStart: { gte: since } },
       _sum: { unitsSold: true, revenue: true },
     });
 
     const salesVelocity = salesAgg.map((row) => ({
       channel: row.channel as string,
-      fba: row.channel === 'AMAZON' ? (row._sum.unitsSold ?? 0) : 0,
-      mfn: row.channel !== 'AMAZON' ? (row._sum.unitsSold ?? 0) : 0,
+      fulfillmentType: row.fulfillmentType as string,
+      fba: row.fulfillmentType === 'FBA' ? (row._sum.unitsSold ?? 0) : 0,
+      mfn: row.fulfillmentType === 'MFN' ? (row._sum.unitsSold ?? 0) : 0,
     }));
 
     // 2. Stock distribution per location

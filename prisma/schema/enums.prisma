@@ -268,3 +268,9 @@ enum SyncStatus {
     PARTIAL_SUCCESS
     FAILED
 }
+
+enum FulfillmentType {
+    FBA
+    MFN
+    ALL
+}

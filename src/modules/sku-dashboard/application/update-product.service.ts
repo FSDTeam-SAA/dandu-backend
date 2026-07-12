@@ -1,11 +1,12 @@
 import AppError from '../../../common/errors/app.error';
+import { normalizeSku } from '../domain/models/product.domain';
 import { ISkuRepository, UpsertProductInput } from '../ports/outbound/sku-repository.port';
 
 export class UpdateProductService {
   constructor(private readonly skuRepository: ISkuRepository) {}
 
   async execute(sku: string, fields: Partial<UpsertProductInput>): Promise<void> {
-    const normalized = sku.trim();
+    const normalized = normalizeSku(sku.trim());
     if (!normalized) throw AppError.badRequest('SKU is required');
 
     const existing = await this.skuRepository.findMetricsBySku(normalized);

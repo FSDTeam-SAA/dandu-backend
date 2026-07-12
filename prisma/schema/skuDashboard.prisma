@@ -60,6 +60,8 @@ model ProductChannel {
     asin      String?
     listingId String?
     price     Decimal?         @db.Decimal(10, 2)
+    fbaPrice  Decimal?         @db.Decimal(10, 2)
+    mfnPrice  Decimal?         @db.Decimal(10, 2)
     currency  String           @default("USD")
     isActive  Boolean          @default(true)
     updatedAt DateTime         @updatedAt
@@ -79,6 +81,7 @@ model ProductSalesMetric {
     productChannelId String?          @db.VarChar(36)
     channel          SalesChannelType
     country          String?
+    fulfillmentType  FulfillmentType  @default(ALL)
     periodStart      DateTime
     periodEnd        DateTime
     unitsSold        Int              @default(0)
@@ -94,6 +97,8 @@ model ProductSalesMetric {
     @@index([productId, periodStart, periodEnd])
     @@index([channel])
     @@index([country])
+    @@index([fulfillmentType])
+    @@index([productId, channel, country, fulfillmentType, periodStart, periodEnd])
 }
 
 model SkuImportBatch {

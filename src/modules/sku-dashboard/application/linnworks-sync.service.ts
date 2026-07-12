@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { normalizeSku } from '../domain/models/product.domain';
 import {
   LinnworksApiClient,
   LinnworksStockItem,
@@ -188,6 +189,37 @@ export function findChannelPrice(
   return candidates.find((price) => price.Price != null)?.Price ?? null;
 }
 
+export function findFbaPrice(
+  prices: LinnworksStockItem['ItemChannelPrices'] | undefined,
+  source: string,
+): number | null {
+  if (!prices?.length) return null;
+  const normalizedSource = source.toUpperCase();
+  const fbaEntry = prices.find(
+    (price) =>
+      price.Source.toUpperCase() === normalizedSource &&
+      price.SubSource?.toUpperCase().includes('FBA') &&
+      price.Price != null,
+  );
+  return fbaEntry?.Price ?? null;
+}
+
+export function findMfnPrice(
+  prices: LinnworksStockItem['ItemChannelPrices'] | undefined,
+  source: string,
+): number | null {
+  if (!prices?.length) return null;
+  const normalizedSource = source.toUpperCase();
+  const mfnEntry = prices.find(
+    (price) =>
+      price.Source.toUpperCase() === normalizedSource &&
+      (price.SubSource?.toUpperCase().includes('FBM') ||
+        price.SubSource?.toUpperCase().includes('MFN')) &&
+      price.Price != null,
+  );
+  return mfnEntry?.Price ?? null;
+}
+
 export function readExtendedProperty(
   item: LinnworksStockItem,
   names: string[],
@@ -242,13 +274,13 @@ export class LinnworksSyncService {
       // 2. Upsert products
       for (const item of stockItems) {
         if (!item.ItemNumber) continue;
-        idToSku.set(item.StockItemId, item.ItemNumber);
+        idToSku.set(item.StockItemId, normalizeSku(item.ItemNumber));
 
         const mainImage =
           item.Images?.find((img) => img.IsMain) ?? item.Images?.[0];
 
         const productInput: UpsertProductInput = {
-          sku: item.ItemNumber,
+          sku: normalizeSku(item.ItemNumber),
           title: item.ItemTitle ?? item.ItemNumber,
           brand: null,
           category: item.CategoryName ?? null,
@@ -345,7 +377,7 @@ export class LinnworksSyncService {
           .catch(() => []);
 
       for (const listing of channelListings) {
-        const sku = idToSku.get(listing.StockItemId) ?? listing.SKU;
+        const sku = idToSku.get(listing.StockItemId) ?? normalizeSku(listing.SKU);
         if (!sku) continue;
 
         const stockItem = stockItems.find(
@@ -356,6 +388,14 @@ export class LinnworksSyncService {
           listing.Source,
           listing.SubSource,
         );
+        const fbaPrice = findFbaPrice(
+          stockItem?.ItemChannelPrices,
+          listing.Source,
+        );
+        const mfnPrice = findMfnPrice(
+          stockItem?.ItemChannelPrices,
+          listing.Source,
+        );
 
         const channelInput: UpsertChannelInput = {
           sku,
@@ -365,6 +405,8 @@ export class LinnworksSyncService {
           listingId: listing.ListingId ?? listing.ChannelSKURowId ?? null,
           price:
             listing.Price ?? channelPrice ?? stockItem?.RetailPrice ?? null,
+          fbaPrice: fbaPrice ?? undefined,
+          mfnPrice: mfnPrice ?? undefined,
           currency: 'USD',
           isActive: true,
         };
@@ -400,6 +442,7 @@ export class LinnworksSyncService {
             country:
               extractCountryFromSubSource(metric.subSource) ??
               normalizeCountry(metric.country),
+            fulfillmentType: (metric.fulfillmentType as any) ?? 'ALL',
             periodStart: metric.periodStart,
             periodEnd: metric.periodEnd,
             unitsSold: metric.unitsSold,

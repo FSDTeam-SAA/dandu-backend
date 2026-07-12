@@ -1,4 +1,5 @@
 import {
+  FulfillmentType,
   ProductStatus,
   SalesChannelType,
   SkuMetricsDomainModel,
@@ -78,6 +79,8 @@ export interface UpsertChannelInput {
   asin?: string | null;
   listingId?: string | null;
   price?: number | null;
+  fbaPrice?: number | null;
+  mfnPrice?: number | null;
   currency?: string;
   isActive?: boolean;
 }
@@ -86,6 +89,7 @@ export interface UpsertSalesMetricInput {
   sku: string;
   channel: SalesChannelType | 'AMAZON' | 'EBAY' | 'WALMART' | 'SHOPIFY' | 'WEBSITE' | 'OTHER';
   country?: string | null;
+  fulfillmentType?: FulfillmentType | 'FBA' | 'MFN' | 'ALL';
   periodStart: Date;
   periodEnd: Date;
   unitsSold: number;

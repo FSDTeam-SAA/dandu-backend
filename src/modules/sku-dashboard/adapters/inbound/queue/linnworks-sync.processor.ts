@@ -3,6 +3,7 @@ import { Inject } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
 import { Logger } from 'winston';
+import { LinnworksInventoryRefreshService } from '../../../application/linnworks-inventory-refresh.service';
 import { RunLinnworksDailySyncService } from '../../../application/run-linnworks-daily-sync.service';
 import { LinnworksSyncJob } from './linnworks-sync.queue';
 
@@ -12,6 +13,7 @@ export class LinnworksSyncProcessor extends WorkerHost {
     @Inject(WINSTON_MODULE_PROVIDER)
     private readonly logger: Logger,
     private readonly runLinnworksDailySync: RunLinnworksDailySyncService,
+    private readonly linnworksInventoryRefresh: LinnworksInventoryRefreshService,
   ) {
     super();
   }
@@ -23,7 +25,11 @@ export class LinnworksSyncProcessor extends WorkerHost {
       jobName: job.name,
     });
 
+    if (job.data.type === 'inventory-refresh') {
+      await this.linnworksInventoryRefresh.refreshInventory();
+      return;
+    }
+
     await this.runLinnworksDailySync.execute();
   }
 }
-

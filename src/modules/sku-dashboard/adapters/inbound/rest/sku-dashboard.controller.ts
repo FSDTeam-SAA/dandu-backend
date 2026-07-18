@@ -24,11 +24,8 @@ import { GetSkuMetricsService } from '../../../application/get-sku-metrics.servi
 import { BrowseSkusService } from '../../../application/browse-skus.service';
 import { GetDashboardMetricsService } from '../../../application/get-dashboard-metrics.service';
 import { GetInventoryAlertsService } from '../../../application/get-inventory-alerts.service';
-import { LinnworksSyncService } from '../../../application/linnworks-sync.service';
-import { LinnworksInventoryRefreshService } from '../../../application/linnworks-inventory-refresh.service';
 import { LinnworksHistoricalSalesIngestionService } from '../../../application/linnworks-historical-sales-ingestion.service';
 import { UpdateProductService } from '../../../application/update-product.service';
-import { RunLinnworksDailySyncService } from '../../../application/run-linnworks-daily-sync.service';
 import { LinnworksSyncQueue } from '../queue/linnworks-sync.queue';
 
 @ApiTags('SKU Dashboard')
@@ -41,10 +38,7 @@ export class SkuDashboardController {
     private readonly browseSkusService: BrowseSkusService,
     private readonly getDashboardMetricsService: GetDashboardMetricsService,
     private readonly getInventoryAlertsService: GetInventoryAlertsService,
-    private readonly linnworksSyncService: LinnworksSyncService,
-    private readonly linnworksInventoryRefreshService: LinnworksInventoryRefreshService,
     private readonly linnworksHistoricalSalesIngestionService: LinnworksHistoricalSalesIngestionService,
-    private readonly runLinnworksDailySyncService: RunLinnworksDailySyncService,
     private readonly linnworksSyncQueue: LinnworksSyncQueue,
     private readonly updateProductService: UpdateProductService,
   ) {}
@@ -118,19 +112,16 @@ export class SkuDashboardController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Trigger a full Linnworks API sync (products, stock, listings)' })
   @ApiResponse({ status: 200, description: 'Sync result' })
-  async syncLinnworks(@Body('queued') queued?: boolean) {
-    if (queued) {
-      const jobId = await this.linnworksSyncQueue.enqueueManualSync();
-      return {
-        message: 'Linnworks sync queued',
-        data: { jobId },
-      };
-    }
-
-    const result = await this.runLinnworksDailySyncService.execute();
+  async syncLinnworks() {
+    const jobId = await this.linnworksSyncQueue.enqueueManualSync();
     return {
-      message: 'Linnworks sync completed',
-      data: result,
+      message: 'Linnworks sync queued',
+      data: {
+        jobId,
+        jobType: 'manual',
+        status: 'QUEUED',
+        queuedAt: new Date().toISOString(),
+      },
     };
   }
 
@@ -142,12 +133,15 @@ export class SkuDashboardController {
   @ApiOperation({ summary: 'Refresh Linnworks inventory and hard-delete local SKUs no longer in Linnworks' })
   @ApiResponse({ status: 200, description: 'Inventory refresh result' })
   async refreshInventory() {
-    const result = await this.linnworksInventoryRefreshService.refreshInventory();
+    const jobId = await this.linnworksSyncQueue.enqueueInventoryRefresh();
     return {
-      message: result.status === 'COMPLETED'
-        ? 'Inventory refresh complete'
-        : 'Inventory refresh failed',
-      data: result,
+      message: 'Inventory refresh queued',
+      data: {
+        jobId,
+        jobType: 'inventory-refresh',
+        status: 'QUEUED',
+        queuedAt: new Date().toISOString(),
+      },
     };
   }
 

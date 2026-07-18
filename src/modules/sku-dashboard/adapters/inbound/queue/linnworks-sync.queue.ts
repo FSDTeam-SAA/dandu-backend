@@ -5,7 +5,7 @@ import { APP_CONFIG_TOKEN } from '../../../../../common/domain/interfaces/app-co
 import type { IAppConfig } from '../../../../../common/domain/interfaces/app-config.interface';
 
 export interface LinnworksSyncJob {
-  type: 'daily' | 'manual';
+  type: 'daily' | 'manual' | 'inventory-refresh';
 }
 
 @Injectable()
@@ -34,6 +34,20 @@ export class LinnworksSyncQueue implements OnModuleInit {
     const job = await this.queue.add(
       'manual-sync',
       { type: 'manual' },
+      {
+        attempts: 1,
+        removeOnComplete: 10,
+        removeOnFail: 100,
+      },
+    );
+
+    return job.id;
+  }
+
+  async enqueueInventoryRefresh(): Promise<string | undefined> {
+    const job = await this.queue.add(
+      'inventory-refresh',
+      { type: 'inventory-refresh' },
       {
         attempts: 1,
         removeOnComplete: 10,

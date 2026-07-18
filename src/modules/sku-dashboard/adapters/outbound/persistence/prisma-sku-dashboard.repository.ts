@@ -426,6 +426,7 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
     );
     const channel = input.channel as SalesChannelType;
     const country = input.country ?? null;
+    const fulfillmentType = (input.fulfillmentType as any) ?? 'ALL';
     const revenue = new Prisma.Decimal(input.revenue ?? 0);
 
     const productChannel = await this.prisma.productChannel.findFirst({
@@ -442,6 +443,7 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
         productId: product.id,
         channel,
         country,
+        fulfillmentType,
         periodStart,
         periodEnd,
       },
@@ -479,6 +481,7 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
         productChannelId: productChannel?.id,
         channel,
         country,
+        fulfillmentType,
         periodStart,
         periodEnd,
         unitsSold: input.unitsSold,
@@ -563,6 +566,7 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
 
       const channel = input.channel as SalesChannelType;
       const country = input.country ?? null;
+      const fulfillmentType = (input.fulfillmentType as any) ?? 'ALL';
       const productChannel =
         channelByExactKey.get([product.id, channel, country ?? ''].join('|')) ??
         channelByFallbackKey.get([product.id, channel].join('|'));
@@ -573,6 +577,7 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
         productChannelId: productChannel?.id,
         channel,
         country,
+        fulfillmentType,
         periodStart,
         periodEnd,
         unitsSold: input.unitsSold,
@@ -651,6 +656,9 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
           height: this.toDecimal(product.height),
           imageUrl: product.imageUrl,
           productUrl: product.productUrl,
+          material: product.material,
+          thickness: product.thickness,
+          packQty: product.packQty,
           lastSyncedAt: product.lastSyncedAt,
         },
         update: {
@@ -665,6 +673,9 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
           height: this.toDecimal(product.height),
           imageUrl: product.imageUrl,
           productUrl: product.productUrl,
+          material: product.material,
+          thickness: product.thickness,
+          packQty: product.packQty,
           lastSyncedAt: product.lastSyncedAt,
         },
       });
@@ -738,6 +749,8 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
 
       const data = {
         price: this.toDecimal(channel.price),
+        fbaPrice: this.toDecimal(channel.fbaPrice),
+        mfnPrice: this.toDecimal(channel.mfnPrice),
         currency: channel.currency || 'USD',
         isActive: channel.isActive ?? true,
       };
@@ -770,14 +783,20 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
     for (const metric of metrics) {
       const productId = products.get(metric.sku);
       if (!productId) continue;
+      const { periodStart, periodEnd } = normalizeMetricPeriod(
+        metric.periodStart,
+        metric.periodEnd,
+      );
+      const fulfillmentType = (metric.fulfillmentType as any) ?? 'ALL';
 
       await this.prisma.productSalesMetric.deleteMany({
         where: {
           productId,
           channel: metric.channel as SalesChannelType,
           country: metric.country || null,
-          periodStart: metric.periodStart,
-          periodEnd: metric.periodEnd,
+          fulfillmentType,
+          periodStart,
+          periodEnd,
         },
       });
 
@@ -786,16 +805,17 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
           productId,
           channel: metric.channel as SalesChannelType,
           country: metric.country || null,
-          periodStart: metric.periodStart,
-          periodEnd: metric.periodEnd,
+          fulfillmentType,
+          periodStart,
+          periodEnd,
           unitsSold: metric.unitsSold,
           revenue: this.toDecimal(metric.revenue) || new Prisma.Decimal(0),
           velocity: new Prisma.Decimal(
             metric.unitsSold /
               Math.max(
                 1,
-                Math.ceil(
-                  (metric.periodEnd.getTime() - metric.periodStart.getTime()) /
+                Math.round(
+                  (periodEnd.getTime() - periodStart.getTime()) /
                     (24 * 60 * 60 * 1000),
                 ),
               ),

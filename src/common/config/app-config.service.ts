@@ -79,4 +79,8 @@ export class AppConfigService implements IAppConfig {
   get linnworks_daily_sync_cron(): string {
     return config.linnworks_daily_sync_cron;
   }
+
+  get linnworks_inventory_refresh_cron(): string {
+    return config.linnworks_inventory_refresh_cron;
+  }
 }

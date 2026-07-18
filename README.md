@@ -857,7 +857,8 @@ For detailed information, see [docs/SWAGGER.md](docs/SWAGGER.md)
 | `LINNWORKS_TOKEN` | ❌ | - | Linnworks auth token; `LINNWORKS_AUTH_TOKEN` and `LINNWORKS_INSTALLATION_ID` are accepted as aliases |
 | `LINNWORKS_AUTH_URL` | ❌ | `https://api.linnworks.net/api/Auth/AuthorizeByApplication` | Linnworks authorization endpoint |
 | `LINNWORKS_DEFAULT_SERVER` | ❌ | `https://us-ext.linnworks.net` | Default Linnworks API server |
-| `LINNWORKS_DAILY_SYNC_CRON` | ❌ | `0 3 * * *` | Cron schedule for the daily Linnworks sync |
+| `LINNWORKS_DAILY_SYNC_CRON` | ❌ | `0 */6 * * *` | Cron schedule for the recurring Linnworks catalog/sales sync |
+| `LINNWORKS_INVENTORY_REFRESH_CRON` | ❌ | `30 */6 * * *` | Cron schedule for the separate recurring Linnworks inventory refresh |
 
 ### Create `.env` File
 

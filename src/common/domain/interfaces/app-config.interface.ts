@@ -18,6 +18,7 @@ export interface IAppConfig {
   readonly linnworks_retry_base_delay_ms: number;
   readonly linnworks_rate_limit_per_minute: number;
   readonly linnworks_daily_sync_cron: string;
+  readonly linnworks_inventory_refresh_cron: string;
 }
 
 export const APP_CONFIG_TOKEN = Symbol('IAppConfig');

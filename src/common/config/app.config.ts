@@ -32,6 +32,7 @@ interface AppConfig {
   linnworks_retry_base_delay_ms: number;
   linnworks_rate_limit_per_minute: number;
   linnworks_daily_sync_cron: string;
+  linnworks_inventory_refresh_cron: string;
 }
 
 const parseCsv = (value?: string): string[] =>
@@ -107,7 +108,8 @@ const config: AppConfig = {
     process.env.LINNWORKS_RATE_LIMIT_PER_MINUTE || '145',
     10,
   ),
-  linnworks_daily_sync_cron: process.env.LINNWORKS_DAILY_SYNC_CRON || '0 0 * * *',
+  linnworks_daily_sync_cron: process.env.LINNWORKS_DAILY_SYNC_CRON || '0 */6 * * *',
+  linnworks_inventory_refresh_cron: process.env.LINNWORKS_INVENTORY_REFRESH_CRON || '30 */6 * * *',
 };
 
 export default config;

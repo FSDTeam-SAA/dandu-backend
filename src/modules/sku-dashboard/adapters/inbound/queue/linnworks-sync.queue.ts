@@ -18,12 +18,25 @@ export class LinnworksSyncQueue implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
+    await this.removeLegacyRepeatableJobs();
+
     await this.queue.add(
-      'daily-sync',
+      'scheduled-sync',
       { type: 'daily' },
       {
-        jobId: 'linnworks-daily-sync',
+        jobId: 'linnworks-scheduled-sync',
         repeat: { pattern: this.config.linnworks_daily_sync_cron },
+        removeOnComplete: 10,
+        removeOnFail: 100,
+      },
+    );
+
+    await this.queue.add(
+      'scheduled-inventory-refresh',
+      { type: 'inventory-refresh' },
+      {
+        jobId: 'linnworks-scheduled-inventory-refresh',
+        repeat: { pattern: this.config.linnworks_inventory_refresh_cron },
         removeOnComplete: 10,
         removeOnFail: 100,
       },
@@ -56,5 +69,14 @@ export class LinnworksSyncQueue implements OnModuleInit {
     );
 
     return job.id;
+  }
+
+  private async removeLegacyRepeatableJobs(): Promise<void> {
+    const repeatableJobs = await this.queue.getRepeatableJobs();
+    await Promise.all(
+      repeatableJobs
+        .filter((job) => job.id === 'linnworks-daily-sync' || job.name === 'daily-sync')
+        .map((job) => this.queue.removeRepeatableByKey(job.key)),
+    );
   }
 }

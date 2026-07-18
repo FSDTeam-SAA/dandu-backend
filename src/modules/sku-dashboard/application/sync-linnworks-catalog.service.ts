@@ -200,6 +200,9 @@ export class SyncLinnworksCatalogService {
   }
 
   private inferLocationType(location?: LinnworksStockLocation): StockLocationType {
+    const normalized = `${location?.LocationName || ''} ${location?.LocationTag || ''}`.toUpperCase();
+    if (normalized.includes('FBA') || normalized.includes('FULFILLMENT')) return 'FBA';
+    if (normalized.includes('MFN') || normalized.includes('FBM') || normalized.includes('MERCHANT')) return 'FBM';
     if (location?.IsFulfillmentCenter) return 'FBA';
     if (location?.IsWarehouseManaged) return 'WAREHOUSE';
     return 'FBM';

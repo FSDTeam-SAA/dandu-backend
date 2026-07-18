@@ -116,7 +116,7 @@ export class SyncLinnworksSalesService {
           order.dProcessedOn || order.dReceivedDate || new Date().toISOString(),
         ),
         channel: this.toSalesChannel(order.Source),
-        country: order.cCountry || null,
+        country: this.toCountryCode(order.cCountry || order.SubSource || null),
         currency: order.cCurrency || 'USD',
         fulfillmentType,
       });
@@ -189,5 +189,14 @@ export class SyncLinnworksSalesService {
     }
     return 'OTHER';
   }
-}
 
+  private toCountryCode(value?: string | null): string | null {
+    const normalized = (value || '').toUpperCase();
+    if (!normalized) return null;
+    if (['US', 'USA', 'U.S.', 'U.S.A.', 'UNITED STATES', 'UNITED STATES OF AMERICA'].includes(normalized)) return 'US';
+    if (['CA', 'CAN', 'CANADA'].includes(normalized)) return 'CA';
+    if (normalized.includes('CANADA') || normalized.includes('CAFBA') || normalized.includes('CAFBM')) return 'CA';
+    if (normalized.includes('UNITED STATES') || normalized.includes('USFBA') || normalized.includes('USFBM')) return 'US';
+    return normalized;
+  }
+}

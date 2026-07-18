@@ -29,7 +29,6 @@ import { UpdateProductService } from './application/update-product.service';
 import { LinnworksSyncService } from './application/linnworks-sync.service';
 import { LinnworksInventoryRefreshService } from './application/linnworks-inventory-refresh.service';
 import { LinnworksHistoricalSalesIngestionService } from './application/linnworks-historical-sales-ingestion.service';
-import { SyncSchedulerService } from './application/sync-scheduler.service';
 import { RunLinnworksDailySyncService } from './application/run-linnworks-daily-sync.service';
 import { SyncLinnworksCatalogService } from './application/sync-linnworks-catalog.service';
 import { SyncLinnworksSalesService } from './application/sync-linnworks-sales.service';
@@ -129,7 +128,6 @@ import { LinnworksApiClient } from './adapters/outbound/linnworks/linnworks-api.
         new LinnworksHistoricalSalesIngestionService(client, repo),
       inject: [LinnworksApiClient, SKU_REPOSITORY_TOKEN],
     },
-    SyncSchedulerService,
     {
       provide: SyncLinnworksCatalogService,
       useFactory: (

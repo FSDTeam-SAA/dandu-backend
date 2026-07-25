@@ -810,6 +810,9 @@ export class LinnworksApiClient {
     const all: LinnworksOrderDetails[] = [];
 
     for (let i = 0; i < orderIds.length; i += BATCH) {
+      if (i > 0) {
+        await new Promise((r) => setTimeout(r, 500));
+      }
       const batchIds = orderIds.slice(i, i + BATCH);
       const result = await this.post<unknown>('/api/Orders/GetOrdersById', {
         pkOrderIds: batchIds,

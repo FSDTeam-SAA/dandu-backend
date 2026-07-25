@@ -141,6 +141,10 @@ function addUtcDays(date: Date, days: number): Date {
   return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export function createSafeDateChunks(
   fromDate: Date,
   toDate: Date,
@@ -273,6 +277,7 @@ export class LinnworksHistoricalSalesIngestionService {
     let failedRows = 0;
     let clearedMetrics = 0;
     const chunkResults: HistoricalSalesChunkResult[] = [];
+    const metricBucket = new Map<string, IncrementSalesMetricInput>();
 
     this.logger.log(
       `Historical Linnworks sales ingestion started: ${fromDate.toISOString()} to ${toDate.toISOString()}`,
@@ -284,7 +289,6 @@ export class LinnworksHistoricalSalesIngestionService {
       }
 
       const chunks = createSafeDateChunks(fromDate, toDate, chunkDays);
-      const metricBucket = new Map<string, IncrementSalesMetricInput>();
 
       for (const chunk of chunks) {
         const chunkResult: HistoricalSalesChunkResult = {
@@ -299,6 +303,10 @@ export class LinnworksHistoricalSalesIngestionService {
         let totalPages = 1;
 
         do {
+          if (pageNumber > 1) {
+            await sleep(500);
+          }
+
           const page = await this.linnworksClient.searchProcessedOrdersPaged(
             chunk.from,
             chunk.to,
@@ -419,9 +427,25 @@ export class LinnworksHistoricalSalesIngestionService {
       const durationMs = Date.now() - startedAt;
       const message = err instanceof Error ? err.message : String(err);
       const parsedError = parseLinnworksSearchError(message);
+
+      if (metricBucket.size > 0) {
+        this.logger.warn(
+          `Flushing ${metricBucket.size} partial metric buckets from interrupted sync`,
+        );
+        const partialResult =
+          await this.skuRepository.replaceSalesMetricsForPeriod(
+            fromDate,
+            toDate,
+            [...metricBucket.values()],
+          );
+        metricsUpdated = partialResult.created;
+        skippedItemRows = partialResult.skipped;
+        clearedMetrics = partialResult.cleared;
+      }
+
       const userMessage = parsedError.failedChunk
-        ? `Linnworks rejected the processed-orders search for ${toUserDate(parsedError.failedChunk.fromDate)} to ${toUserDate(parsedError.failedChunk.toDate)}. No sales data was imported.`
-        : 'Historical sales import could not be completed. No sales data was imported.';
+        ? `Linnworks rejected the processed-orders search for ${toUserDate(parsedError.failedChunk.fromDate)} to ${toUserDate(parsedError.failedChunk.toDate)}. Partial sales data was imported.`
+        : 'Historical sales import was interrupted. Partial sales data was imported.';
       const errorCode = parsedError.isLinnworksInvalidRequest
         ? 'LINNWORKS_PROCESSED_ORDER_SEARCH_INVALID'
         : 'HISTORICAL_SALES_IMPORT_FAILED';

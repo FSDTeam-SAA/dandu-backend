@@ -1,6 +1,7 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { APP_CONFIG_TOKEN } from '../../../../../common/domain/interfaces/app-config.interface';
 import type { IAppConfig } from '../../../../../common/domain/interfaces/app-config.interface';
+import { normalizeSku } from '../../../domain/models/product.domain';
 import {
   ILinnworksClient,
   LinnworksChannelSku,
@@ -34,6 +35,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 @Injectable()
 export class LinnworksClient implements ILinnworksClient {
+  private readonly logger = new Logger(LinnworksClient.name);
   private session: AuthSession | null = null;
   private readonly requestTimestamps: number[] = [];
 
@@ -110,12 +112,196 @@ export class LinnworksClient implements ILinnworksClient {
   ): Promise<LinnworksOrderItem[]> {
     if (orderIds.length === 0) return [];
 
-    return this.request<LinnworksOrderItem[]>(
-      '/api/ProcessedOrders/GetOrderItemsByOrderIds',
-      {
-        orderIds,
-      },
-    );
+    const BATCH = 150;
+    const allItems: LinnworksOrderItem[] = [];
+
+    for (let i = 0; i < orderIds.length; i += BATCH) {
+      const batchIds = orderIds.slice(i, i + BATCH);
+      const result = await this.request<unknown>(
+        '/api/Orders/GetOrders',
+        {
+          ordersIds: batchIds,
+          loadItems: true,
+          loadAdditionalInfo: false,
+        },
+        {
+          emptyValue: [] as unknown as LinnworksOrderItem[],
+        },
+      );
+
+      const batchItems = this.normalizeOrderItems(result, batchIds);
+      if (batchItems.length === 0) {
+        this.logger.warn(
+          `GetOrders returned no parsed line items for ${batchIds.length} orders`,
+        );
+      }
+      allItems.push(...batchItems);
+    }
+
+    return allItems;
+  }
+
+  private normalizeOrderItems(
+    response: unknown,
+    orderIds: string[],
+  ): LinnworksOrderItem[] {
+    const items: LinnworksOrderItem[] = [];
+    const requestedOrderIds = new Set(orderIds.map((id) => id.toLowerCase()));
+
+    const readFirstString = (
+      obj: Record<string, unknown>,
+      keys: string[],
+    ): string | undefined => {
+      for (const key of keys) {
+        const value = obj[key];
+        if (typeof value === 'string' && value.trim() !== '') return value;
+      }
+      return undefined;
+    };
+
+    const readFirstNumber = (
+      obj: Record<string, unknown>,
+      keys: string[],
+    ): number | undefined => {
+      for (const key of keys) {
+        const value = obj[key];
+        if (typeof value === 'number' && Number.isFinite(value)) return value;
+        if (typeof value === 'string' && value.trim() !== '') {
+          const parsed = Number(value);
+          if (Number.isFinite(parsed)) return parsed;
+        }
+      }
+      return undefined;
+    };
+
+    const pushItem = (
+      orderId: string | undefined,
+      item: Record<string, unknown>,
+    ) => {
+      const resolvedOrderId =
+        orderId ??
+        readFirstString(item, [
+          'pkOrderID',
+          'pkOrderId',
+          'fkOrderId',
+          'OrderId',
+          'orderId',
+          'id',
+        ]);
+      if (!resolvedOrderId) return;
+
+      const sku = normalizeSku(
+        readFirstString(item, [
+          'SKU',
+          'Sku',
+          'sku',
+          'ItemNumber',
+          'itemNumber',
+          'ItemSku',
+          'itemSku',
+        ]) ?? '',
+      );
+      const quantity = readFirstNumber(item, [
+        'Quantity',
+        'quantity',
+        'Qty',
+        'qty',
+        'nQty',
+      ]);
+      if (!sku || !quantity || quantity <= 0) return;
+
+      items.push({
+        fkOrderID: resolvedOrderId,
+        OrderId: resolvedOrderId,
+        SKU: sku,
+        ItemNumber: normalizeSku(
+          readFirstString(item, ['ItemNumber', 'itemNumber']) ?? sku,
+        ),
+        Quantity: quantity,
+        PricePerUnit: readFirstNumber(item, [
+          'PricePerUnit',
+          'pricePerUnit',
+          'Price',
+          'price',
+          'UnitPrice',
+          'unitPrice',
+        ]),
+        Cost: readFirstNumber(item, ['Cost', 'cost']),
+      });
+    };
+
+    const visit = (value: unknown, inheritedOrderId?: string) => {
+      if (!value) return;
+
+      if (Array.isArray(value)) {
+        for (const item of value) visit(item, inheritedOrderId);
+        return;
+      }
+
+      if (typeof value !== 'object') return;
+      const obj = value as Record<string, unknown>;
+      const objOrderId =
+        readFirstString(obj, [
+          'pkOrderID',
+          'pkOrderId',
+          'pkOrderid',
+          'fkOrderId',
+          'OrderId',
+          'orderId',
+          'OrderIdGuid',
+          'id',
+        ]) ?? inheritedOrderId;
+
+      const nestedItems =
+        obj.Items ??
+        obj.items ??
+        obj.OrderItems ??
+        obj.orderItems ??
+        obj.OrderLines ??
+        obj.orderLines ??
+        obj.lines ??
+        obj.Lines;
+      if (Array.isArray(nestedItems)) {
+        for (const item of nestedItems) {
+          if (item && typeof item === 'object')
+            pushItem(objOrderId, item as Record<string, unknown>);
+        }
+        return;
+      }
+
+      const directSku = readFirstString(obj, [
+        'SKU',
+        'Sku',
+        'sku',
+        'ItemNumber',
+        'itemNumber',
+        'ItemSku',
+        'itemSku',
+      ]);
+      const directQuantity = readFirstNumber(obj, [
+        'Quantity',
+        'quantity',
+        'Qty',
+        'qty',
+        'nQty',
+      ]);
+      if (directSku && directQuantity && directQuantity > 0) {
+        pushItem(objOrderId, obj);
+        return;
+      }
+
+      for (const [key, child] of Object.entries(obj)) {
+        const nextOrderId = requestedOrderIds.has(key.toLowerCase())
+          ? key
+          : objOrderId;
+        if (child && typeof child === 'object') {
+          visit(child, nextOrderId);
+        }
+      }
+    };
+
+    visit(response);
+    return items;
   }
 
   private async request<T>(

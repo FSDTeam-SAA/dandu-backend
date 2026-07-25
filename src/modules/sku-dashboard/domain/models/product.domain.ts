@@ -25,6 +25,26 @@ export function normalizeSku(sku: string): string {
   return sku.replace(/(USFBA|CAFBA|USFBM|CAFBM|FBA|FBM|MFN)$/i, '').trim();
 }
 
+/**
+ * Classify fulfillment type from SubSource or Source fields.
+ * SubSource for Amazon orders can contain: "USFBA", "CAFBA", "USFBM", "CAFBM",
+ * "AMAZON", "Amazon.com", etc.
+ */
+export function classifyFulfillmentType(
+  subSource?: string | null,
+  source?: string | null,
+): string {
+  const subUpper = (subSource ?? '').toUpperCase();
+  if (subUpper.includes('FBA')) return 'FBA';
+  if (subUpper.includes('FBM') || subUpper.includes('MFN')) return 'MFN';
+
+  const sourceUpper = (source ?? '').toUpperCase();
+  if (sourceUpper.includes('FBA')) return 'FBA';
+  if (sourceUpper.includes('FBM') || sourceUpper.includes('MFN')) return 'MFN';
+
+  return 'ALL';
+}
+
 export interface ProductDomainModel {
   id: string;
   sku: string;

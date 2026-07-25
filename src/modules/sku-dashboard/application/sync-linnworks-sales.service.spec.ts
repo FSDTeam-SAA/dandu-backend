@@ -1,6 +1,36 @@
 import { ILinnworksClient } from '../ports/outbound/linnworks-client.port';
-import { ISkuRepository, UpsertSalesMetricInput } from '../ports/outbound/sku-repository.port';
+import {
+  ISkuRepository,
+  UpsertSalesMetricInput,
+} from '../ports/outbound/sku-repository.port';
+import { classifyFulfillmentType } from '../domain/models/product.domain';
 import { SyncLinnworksSalesService } from './sync-linnworks-sales.service';
+
+describe('classifyFulfillmentType', () => {
+  it('returns FBA when SubSource contains FBA', () => {
+    expect(classifyFulfillmentType('USFBA', 'AMAZON')).toBe('FBA');
+    expect(classifyFulfillmentType('CAFBA', 'AMAZON')).toBe('FBA');
+    expect(classifyFulfillmentType('FBA', 'AMAZON')).toBe('FBA');
+  });
+
+  it('returns MFN when SubSource contains FBM or MFN', () => {
+    expect(classifyFulfillmentType('USFBM', 'AMAZON')).toBe('MFN');
+    expect(classifyFulfillmentType('CAFBM', 'AMAZON')).toBe('MFN');
+    expect(classifyFulfillmentType('MFN', 'AMAZON')).toBe('MFN');
+  });
+
+  it('returns ALL when SubSource has no fulfillment indicators', () => {
+    expect(classifyFulfillmentType('AMAZON', 'AMAZON')).toBe('ALL');
+    expect(classifyFulfillmentType('Amazon.com', 'AMAZON')).toBe('ALL');
+    expect(classifyFulfillmentType(null, 'AMAZON')).toBe('ALL');
+    expect(classifyFulfillmentType(undefined, 'AMAZON')).toBe('ALL');
+  });
+
+  it('checks Source as fallback', () => {
+    expect(classifyFulfillmentType(null, 'AMAZON_FBA')).toBe('FBA');
+    expect(classifyFulfillmentType(null, 'AMAZON_FBM')).toBe('MFN');
+  });
+});
 
 describe('SyncLinnworksSalesService', () => {
   it('chunks processed-order searches into 90-day windows and stores rolling metrics', async () => {
@@ -51,13 +81,17 @@ describe('SyncLinnworksSalesService', () => {
       }),
     } as unknown as ISkuRepository;
 
-    const service = new SyncLinnworksSalesService(linnworksClient, skuRepository);
+    const service = new SyncLinnworksSalesService(
+      linnworksClient,
+      skuRepository,
+    );
     const result = await service.execute(365);
 
     expect(searchedRanges.length).toBeGreaterThan(1);
     expect(
       searchedRanges.every(
-        (range) => range.to.getTime() - range.from.getTime() <= 90 * 24 * 60 * 60 * 1000,
+        (range) =>
+          range.to.getTime() - range.from.getTime() <= 90 * 24 * 60 * 60 * 1000,
       ),
     ).toBe(true);
     expect(result.orderItems).toBe(1);
@@ -66,4 +100,3 @@ describe('SyncLinnworksSalesService', () => {
     expect(metrics.map((metric) => metric.revenue)).toEqual([20, 20, 20, 20]);
   });
 });
-

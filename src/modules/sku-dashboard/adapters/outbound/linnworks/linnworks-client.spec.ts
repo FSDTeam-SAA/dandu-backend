@@ -22,6 +22,7 @@ const config: IAppConfig = {
   linnworks_retry_base_delay_ms: 1,
   linnworks_rate_limit_per_minute: 150,
   linnworks_daily_sync_cron: '0 3 * * *',
+  linnworks_inventory_refresh_cron: '30 3 * * *',
 };
 
 const jsonResponse = (body: unknown): Response =>
@@ -197,5 +198,107 @@ describe('LinnworksClient', () => {
       TotalPages: 0,
       Data: [],
     });
+  });
+
+  it('fetches order items via /api/Orders/GetOrders and normalizes the response', async () => {
+    const orderId = 'order-123';
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        jsonResponse({
+          Token: 'session-token',
+          Server: 'https://assigned-ext.linnworks.net',
+          Ttl: 30,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            pkOrderID: orderId,
+            Items: [
+              { SKU: 'SKU-ABC', Quantity: 3, PricePerUnit: 15 },
+              { SKU: 'SKU-XYZ', Quantity: 1, PricePerUnit: 25 },
+            ],
+          },
+        ]),
+      );
+
+    const client = new LinnworksClient(config);
+    const items = await client.getOrderItemsByOrderIds([orderId]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      'https://assigned-ext.linnworks.net/api/Orders/GetOrders',
+    );
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({
+      fkOrderID: orderId,
+      SKU: 'SKU-ABC',
+      Quantity: 3,
+      PricePerUnit: 15,
+    });
+    expect(items[1]).toMatchObject({
+      fkOrderID: orderId,
+      SKU: 'SKU-XYZ',
+      Quantity: 1,
+      PricePerUnit: 25,
+    });
+  });
+
+  it('normalizes SKUs by stripping FBA/FBM suffixes from order items', async () => {
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        jsonResponse({
+          Token: 'session-token',
+          Server: 'https://assigned-ext.linnworks.net',
+          Ttl: 30,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            pkOrderID: 'order-456',
+            Items: [{ SKU: 'MYSKUUSFBA', Quantity: 2, PricePerUnit: 10 }],
+          },
+        ]),
+      );
+
+    const client = new LinnworksClient(config);
+    const items = await client.getOrderItemsByOrderIds(['order-456']);
+
+    expect(items).toHaveLength(1);
+    expect(items[0].SKU).toBe('MYSKU');
+  });
+
+  it('skips items with missing SKU or zero quantity', async () => {
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        jsonResponse({
+          Token: 'session-token',
+          Server: 'https://assigned-ext.linnworks.net',
+          Ttl: 30,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            pkOrderID: 'order-789',
+            Items: [
+              { SKU: '', Quantity: 1, PricePerUnit: 10 },
+              { SKU: 'GOOD-SKU', Quantity: 0, PricePerUnit: 10 },
+              { SKU: 'VALID-SKU', Quantity: 5, PricePerUnit: 20 },
+            ],
+          },
+        ]),
+      );
+
+    const client = new LinnworksClient(config);
+    const items = await client.getOrderItemsByOrderIds(['order-789']);
+
+    expect(items).toHaveLength(1);
+    expect(items[0].SKU).toBe('VALID-SKU');
+    expect(items[0].Quantity).toBe(5);
   });
 });

@@ -90,3 +90,5 @@ secrets/
 # security files
 audit-logs/
 security-reports/
+
+AGENTS.md

@@ -1,14 +1,25 @@
-
 import { Logger } from '@nestjs/common';
 import {
   LinnworksApiClient,
   LinnworksOrderItem,
   LinnworksProcessedOrderSummary,
 } from '../adapters/outbound/linnworks/linnworks-api.client';
-import { normalizeSku } from '../domain/models/product.domain';
-import { ISkuRepository, IncrementSalesMetricInput } from '../ports/outbound/sku-repository.port';
+import {
+  classifyFulfillmentType,
+  normalizeSku,
+} from '../domain/models/product.domain';
+import {
+  ISkuRepository,
+  IncrementSalesMetricInput,
+} from '../ports/outbound/sku-repository.port';
 
-type ChannelType = 'AMAZON' | 'EBAY' | 'WALMART' | 'SHOPIFY' | 'WEBSITE' | 'OTHER';
+type ChannelType =
+  | 'AMAZON'
+  | 'EBAY'
+  | 'WALMART'
+  | 'SHOPIFY'
+  | 'WEBSITE'
+  | 'OTHER';
 
 export interface HistoricalSalesIngestionOptions {
   fromDate?: Date;
@@ -57,17 +68,29 @@ interface DateChunk {
   to: Date;
 }
 
-function mapChannelSource(source?: string | null, subSource?: string | null): ChannelType {
+function mapChannelSource(
+  source?: string | null,
+  subSource?: string | null,
+): ChannelType {
   const value = `${source ?? ''} ${subSource ?? ''}`.toUpperCase().trim();
   if (value.includes('AMAZON')) return 'AMAZON';
   if (value.includes('EBAY')) return 'EBAY';
   if (value.includes('WALMART')) return 'WALMART';
   if (value.includes('SHOPIFY')) return 'SHOPIFY';
-  if (value.includes('WEB') || value.includes('DANDU') || value.includes('BIGCOMMERCE') || value.includes('DISTINCT')) return 'WEBSITE';
+  if (
+    value.includes('WEB') ||
+    value.includes('DANDU') ||
+    value.includes('BIGCOMMERCE') ||
+    value.includes('DISTINCT')
+  )
+    return 'WEBSITE';
   return 'OTHER';
 }
 
-function normalizeCountry(country?: string | null, subSource?: string | null): string | null {
+function normalizeCountry(
+  country?: string | null,
+  subSource?: string | null,
+): string | null {
   const raw = (country || subSource || '').trim();
   if (!raw) return null;
 
@@ -94,18 +117,34 @@ function normalizeCountry(country?: string | null, subSource?: string | null): s
 }
 
 function startOfUtcDay(date: Date): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
 }
 
 function endOfUtcDay(date: Date): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 23, 59, 59, 999));
+  return new Date(
+    Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate(),
+      23,
+      59,
+      59,
+      999,
+    ),
+  );
 }
 
 function addUtcDays(date: Date, days: number): Date {
   return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
 }
 
-export function createSafeDateChunks(fromDate: Date, toDate: Date, chunkDays = 90): DateChunk[] {
+export function createSafeDateChunks(
+  fromDate: Date,
+  toDate: Date,
+  chunkDays = 90,
+): DateChunk[] {
   if (chunkDays < 1 || chunkDays > 90) {
     throw new Error('chunkDays must be between 1 and 90');
   }
@@ -115,7 +154,9 @@ export function createSafeDateChunks(fromDate: Date, toDate: Date, chunkDays = 9
   const finalTo = endOfUtcDay(toDate);
 
   while (cursor <= finalTo) {
-    const chunkEnd = new Date(Math.min(addUtcDays(cursor, chunkDays).getTime() - 1, finalTo.getTime()));
+    const chunkEnd = new Date(
+      Math.min(addUtcDays(cursor, chunkDays).getTime() - 1, finalTo.getTime()),
+    );
     chunks.push({ from: cursor, to: chunkEnd });
     cursor = new Date(chunkEnd.getTime() + 1);
   }
@@ -132,7 +173,9 @@ function parseLinnworksSearchError(message: string) {
   const isProcessedOrderValidationError =
     message.includes('Linnworks API error 400') &&
     (message.includes('The request is invalid') ||
-      message.includes('End date is required when searching using a date range'));
+      message.includes(
+        'End date is required when searching using a date range',
+      ));
 
   return {
     isLinnworksInvalidRequest: isProcessedOrderValidationError,
@@ -173,13 +216,14 @@ function collectMetricInputs(
   const currency = 'USD';
   const revenue = Number(item.PricePerUnit ?? 0) * quantity;
 
-  const subSourceUpper = (order.SubSource ?? '').toUpperCase();
-  const fulfillmentType =
-    subSourceUpper.includes('FBA') ? 'FBA' :
-    subSourceUpper.includes('FBM') || subSourceUpper.includes('MFN') ? 'MFN' :
-    'ALL';
+  const fulfillmentType = classifyFulfillmentType(
+    order.SubSource,
+    order.Source,
+  ) as 'FBA' | 'MFN' | 'ALL';
 
-  const key = [sku, channel, country ?? '', fulfillmentType, currency].join('|');
+  const key = [sku, channel, country ?? '', fulfillmentType, currency].join(
+    '|',
+  );
   const existing = bucket.get(key) ?? {
     sku,
     channel,
@@ -193,19 +237,24 @@ function collectMetricInputs(
   };
 
   existing.unitsSold += quantity;
-  existing.revenue = Number(existing.revenue ?? 0) + (Number.isFinite(revenue) ? revenue : 0);
+  existing.revenue =
+    Number(existing.revenue ?? 0) + (Number.isFinite(revenue) ? revenue : 0);
   bucket.set(key, existing);
 }
 
 export class LinnworksHistoricalSalesIngestionService {
-  private readonly logger = new Logger(LinnworksHistoricalSalesIngestionService.name);
+  private readonly logger = new Logger(
+    LinnworksHistoricalSalesIngestionService.name,
+  );
 
   constructor(
     private readonly linnworksClient: LinnworksApiClient,
     private readonly skuRepository: ISkuRepository,
   ) {}
 
-  async ingest(options: HistoricalSalesIngestionOptions = {}): Promise<HistoricalSalesIngestionResult> {
+  async ingest(
+    options: HistoricalSalesIngestionOptions = {},
+  ): Promise<HistoricalSalesIngestionResult> {
     const startedAt = Date.now();
     const chunkDays = options.chunkDays ?? 90;
     const resultsPerPage = options.resultsPerPage ?? 200;
@@ -224,7 +273,9 @@ export class LinnworksHistoricalSalesIngestionService {
     let clearedMetrics = 0;
     const chunkResults: HistoricalSalesChunkResult[] = [];
 
-    this.logger.log(`Historical Linnworks sales ingestion started: ${fromDate.toISOString()} to ${toDate.toISOString()}`);
+    this.logger.log(
+      `Historical Linnworks sales ingestion started: ${fromDate.toISOString()} to ${toDate.toISOString()}`,
+    );
 
     try {
       if (fromDate > toDate) {
@@ -259,13 +310,16 @@ export class LinnworksHistoricalSalesIngestionService {
           chunkResult.pagesProcessed++;
 
           const orders = page.data;
-          const orderById = new Map(orders.map((order) => [normalizeOrderId(order.pkOrderID), order]));
+          const orderById = new Map(
+            orders.map((order) => [normalizeOrderId(order.pkOrderID), order]),
+          );
           const orderIds = orders.map((order) => order.pkOrderID);
           ordersProcessed += orderIds.length;
           chunkResult.ordersProcessed += orderIds.length;
 
           if (orderIds.length > 0) {
-            const itemsByOrderId = await this.linnworksClient.getOrderItemsByOrderIds(orderIds);
+            const itemsByOrderId =
+              await this.linnworksClient.getOrderItemsByOrderIds(orderIds);
 
             for (const [orderId, items] of itemsByOrderId) {
               const order = orderById.get(normalizeOrderId(orderId));
@@ -274,7 +328,13 @@ export class LinnworksHistoricalSalesIngestionService {
               for (const item of items) {
                 itemRowsProcessed++;
                 chunkResult.itemRowsProcessed++;
-                collectMetricInputs(order, { ...item, pkOrderID: extractOrderId(item) ?? orderId }, fromDate, toDate, metricBucket);
+                collectMetricInputs(
+                  order,
+                  { ...item, pkOrderID: extractOrderId(item) ?? orderId },
+                  fromDate,
+                  toDate,
+                  metricBucket,
+                );
               }
             }
           }
@@ -285,11 +345,12 @@ export class LinnworksHistoricalSalesIngestionService {
         chunkResults.push(chunkResult);
       }
 
-      const replaceResult = await this.skuRepository.replaceSalesMetricsForPeriod(
-        fromDate,
-        toDate,
-        [...metricBucket.values()],
-      );
+      const replaceResult =
+        await this.skuRepository.replaceSalesMetricsForPeriod(
+          fromDate,
+          toDate,
+          [...metricBucket.values()],
+        );
       clearedMetrics = replaceResult.cleared;
       metricsUpdated = replaceResult.created;
       skippedItemRows = replaceResult.skipped;
@@ -344,29 +405,33 @@ export class LinnworksHistoricalSalesIngestionService {
         ? 'LINNWORKS_PROCESSED_ORDER_SEARCH_INVALID'
         : 'HISTORICAL_SALES_IMPORT_FAILED';
 
-      this.logger.error(`Historical Linnworks sales ingestion failed: ${message}`);
-      await this.skuRepository.createSyncLog({
-        provider: 'linnworks-historical-sales',
-        processedRows: itemRowsProcessed,
-        failedRows: failedRows + 1,
-        status: 'FAILED',
-        errorMessage: message,
-        durationMs,
-        metadata: {
-          fromDate: fromDate.toISOString(),
-          toDate: toDate.toISOString(),
-          chunkDays,
-          resultsPerPage,
-          pagesProcessed,
-          ordersProcessed,
-          itemRowsProcessed,
-          metricsUpdated,
-          skippedItemRows,
-          clearedMetrics,
-          errorCode,
-          failedChunk: parsedError.failedChunk,
-        },
-      }).catch(() => {});
+      this.logger.error(
+        `Historical Linnworks sales ingestion failed: ${message}`,
+      );
+      await this.skuRepository
+        .createSyncLog({
+          provider: 'linnworks-historical-sales',
+          processedRows: itemRowsProcessed,
+          failedRows: failedRows + 1,
+          status: 'FAILED',
+          errorMessage: message,
+          durationMs,
+          metadata: {
+            fromDate: fromDate.toISOString(),
+            toDate: toDate.toISOString(),
+            chunkDays,
+            resultsPerPage,
+            pagesProcessed,
+            ordersProcessed,
+            itemRowsProcessed,
+            metricsUpdated,
+            skippedItemRows,
+            clearedMetrics,
+            errorCode,
+            failedChunk: parsedError.failedChunk,
+          },
+        })
+        .catch(() => {});
 
       return {
         status: 'FAILED',

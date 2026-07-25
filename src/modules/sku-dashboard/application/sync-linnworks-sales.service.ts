@@ -1,4 +1,9 @@
-import { SalesChannelType, normalizeSku } from '../domain/models/product.domain';
+import { Logger } from '@nestjs/common';
+import {
+  SalesChannelType,
+  classifyFulfillmentType,
+  normalizeSku,
+} from '../domain/models/product.domain';
 import {
   ILinnworksClient,
   LinnworksOrderItem,
@@ -35,6 +40,8 @@ const chunk = <T>(items: T[], size: number): T[][] => {
 };
 
 export class SyncLinnworksSalesService {
+  private readonly logger = new Logger(SyncLinnworksSalesService.name);
+
   constructor(
     private readonly linnworksClient: ILinnworksClient,
     private readonly skuRepository: ISkuRepository,
@@ -43,9 +50,17 @@ export class SyncLinnworksSalesService {
   async execute(days = 365): Promise<SalesSyncResult> {
     const periodEnd = new Date();
     const periodStart = new Date(periodEnd.getTime() - days * MS_PER_DAY);
+    this.logger.log(
+      `Sales sync started: ${days}-day window from ${periodStart.toISOString()} to ${periodEnd.toISOString()}`,
+    );
+
     const orders = await this.fetchOrders(periodStart, periodEnd);
+    this.logger.log(`Fetched ${orders.length} processed orders`);
+
     const contexts = this.toOrderContexts(orders);
     const orderIds = Array.from(contexts.keys());
+    this.logger.log(`Fetching order items for ${orderIds.length} orders...`);
+
     const orderItems: LinnworksOrderItem[] = [];
 
     for (const idBatch of chunk(orderIds, 50)) {
@@ -53,8 +68,13 @@ export class SyncLinnworksSalesService {
       if (Array.isArray(items)) orderItems.push(...items);
     }
 
+    this.logger.log(`Fetched ${orderItems.length} order items`);
+
     const metrics = this.aggregateMetrics(orderItems, contexts, periodEnd);
+    this.logger.log(`Aggregated ${metrics.length} sales metric buckets`);
+
     const metricCount = await this.skuRepository.replaceSalesMetrics(metrics);
+    this.logger.log(`Stored ${metricCount} sales metrics`);
 
     return {
       orders: orders.length,
@@ -72,7 +92,9 @@ export class SyncLinnworksSalesService {
     for (
       let from = new Date(periodStart);
       from < periodEnd;
-      from = new Date(Math.min(periodEnd.getTime(), from.getTime() + 90 * MS_PER_DAY))
+      from = new Date(
+        Math.min(periodEnd.getTime(), from.getTime() + 90 * MS_PER_DAY),
+      )
     ) {
       const to = new Date(
         Math.min(periodEnd.getTime(), from.getTime() + 90 * MS_PER_DAY - 1),
@@ -100,16 +122,21 @@ export class SyncLinnworksSalesService {
     orders: LinnworksProcessedOrder[],
   ): Map<string, OrderContext> {
     const contexts = new Map<string, OrderContext>();
+    const subSourceSamples = new Map<string, number>();
 
     for (const order of orders) {
       if (!order.pkOrderID) continue;
 
-      const subSource = order.SubSource ?? '';
-      const subSourceUpper = subSource.toUpperCase();
-      const fulfillmentType =
-        subSourceUpper.includes('FBA') ? 'FBA' :
-        subSourceUpper.includes('FBM') || subSourceUpper.includes('MFN') ? 'MFN' :
-        'ALL';
+      const fulfillmentType = classifyFulfillmentType(
+        order.SubSource,
+        order.Source,
+      );
+
+      const subSample = order.SubSource ?? '(empty)';
+      subSourceSamples.set(
+        subSample,
+        (subSourceSamples.get(subSample) ?? 0) + 1,
+      );
 
       contexts.set(order.pkOrderID, {
         processedAt: new Date(
@@ -121,6 +148,27 @@ export class SyncLinnworksSalesService {
         fulfillmentType,
       });
     }
+
+    const total = orders.length;
+    const fba = [...contexts.values()].filter(
+      (c) => c.fulfillmentType === 'FBA',
+    ).length;
+    const mfn = [...contexts.values()].filter(
+      (c) => c.fulfillmentType === 'MFN',
+    ).length;
+    const all = [...contexts.values()].filter(
+      (c) => c.fulfillmentType === 'ALL',
+    ).length;
+    this.logger.log(
+      `Order fulfillment breakdown: ${total} total, ${fba} FBA, ${mfn} MFN, ${all} ALL (unclassified)`,
+    );
+
+    const topSamples = [...subSourceSamples.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([k, v]) => `${k}(${v})`)
+      .join(', ');
+    this.logger.log(`Top SubSource values: ${topSamples}`);
 
     return contexts;
   }
@@ -193,10 +241,30 @@ export class SyncLinnworksSalesService {
   private toCountryCode(value?: string | null): string | null {
     const normalized = (value || '').toUpperCase();
     if (!normalized) return null;
-    if (['US', 'USA', 'U.S.', 'U.S.A.', 'UNITED STATES', 'UNITED STATES OF AMERICA'].includes(normalized)) return 'US';
+    if (
+      [
+        'US',
+        'USA',
+        'U.S.',
+        'U.S.A.',
+        'UNITED STATES',
+        'UNITED STATES OF AMERICA',
+      ].includes(normalized)
+    )
+      return 'US';
     if (['CA', 'CAN', 'CANADA'].includes(normalized)) return 'CA';
-    if (normalized.includes('CANADA') || normalized.includes('CAFBA') || normalized.includes('CAFBM')) return 'CA';
-    if (normalized.includes('UNITED STATES') || normalized.includes('USFBA') || normalized.includes('USFBM')) return 'US';
+    if (
+      normalized.includes('CANADA') ||
+      normalized.includes('CAFBA') ||
+      normalized.includes('CAFBM')
+    )
+      return 'CA';
+    if (
+      normalized.includes('UNITED STATES') ||
+      normalized.includes('USFBA') ||
+      normalized.includes('USFBM')
+    )
+      return 'US';
     return normalized;
   }
 }

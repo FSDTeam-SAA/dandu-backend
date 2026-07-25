@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import {
   LinnworksApiClient,
+  LinnworksOrderDetails,
   LinnworksOrderItem,
   LinnworksProcessedOrderSummary,
 } from '../adapters/outbound/linnworks/linnworks-api.client';
@@ -318,19 +319,39 @@ export class LinnworksHistoricalSalesIngestionService {
           chunkResult.ordersProcessed += orderIds.length;
 
           if (orderIds.length > 0) {
-            const itemsByOrderId =
-              await this.linnworksClient.getOrderItemsByOrderIds(orderIds);
+            const orderDetails =
+              await this.linnworksClient.getOrdersByIds(orderIds);
 
-            for (const [orderId, items] of itemsByOrderId) {
-              const order = orderById.get(normalizeOrderId(orderId));
-              if (!order) continue;
+            const detailsById = new Map(
+              orderDetails.map((d) => [
+                normalizeOrderId(d.OrderId),
+                d,
+              ]),
+            );
 
-              for (const item of items) {
+            for (const processedOrder of orders) {
+              const detail = detailsById.get(
+                normalizeOrderId(processedOrder.pkOrderID),
+              );
+              if (!detail) continue;
+
+              const channelSource =
+                detail.GeneralInfo?.Source ?? processedOrder.Source ?? 'OTHER';
+              const subSource =
+                detail.GeneralInfo?.SubSource ??
+                detail.GeneralInfo?.SiteCode ??
+                processedOrder.SubSource;
+
+              for (const item of detail.Items ?? []) {
                 itemRowsProcessed++;
                 chunkResult.itemRowsProcessed++;
                 collectMetricInputs(
-                  order,
-                  { ...item, pkOrderID: extractOrderId(item) ?? orderId },
+                  processedOrder,
+                  {
+                    ...item,
+                    pkOrderID: detail.OrderId,
+                    ItemSource: item.ItemSource ?? channelSource,
+                  },
                   fromDate,
                   toDate,
                   metricBucket,

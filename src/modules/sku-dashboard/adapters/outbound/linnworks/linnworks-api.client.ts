@@ -105,6 +105,8 @@ function formatLinnworksDate(date: Date): string {
   return date.toISOString().replace('T', ' ').slice(0, 19);
 }
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export interface LinnworksProcessedOrderSummary {
   pkOrderID: string;
   dProcessedOn?: string;
@@ -186,6 +188,7 @@ export class LinnworksApiClient {
   private cachedToken: string | null = null;
   private cachedServer: string;
   private tokenExpiresAt: Date | null = null;
+  private readonly requestTimestamps: number[] = [];
 
   // Renew if less than 5 minutes left
   private static readonly RENEW_BEFORE_EXPIRY_MS = 5 * 60 * 1000;
@@ -230,10 +233,11 @@ export class LinnworksApiClient {
       Token: this.config.installationToken,
     };
 
-    const response = await fetch(url, {
+    const response = await this.fetchWithQuota(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      skipAuthRetry: true,
     });
 
     if (!response.ok) {
@@ -276,7 +280,7 @@ export class LinnworksApiClient {
       Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
     }
 
-    const response = await fetch(url.toString(), {
+    const response = await this.fetchWithQuota(url.toString(), {
       headers: { Authorization: this.cachedToken! },
     });
 
@@ -284,7 +288,7 @@ export class LinnworksApiClient {
       // Force token renewal once and retry
       this.cachedToken = null;
       await this.ensureToken();
-      const retry = await fetch(url.toString(), {
+      const retry = await this.fetchWithQuota(url.toString(), {
         headers: { Authorization: this.cachedToken! },
       });
       if (!retry.ok) {
@@ -540,7 +544,7 @@ export class LinnworksApiClient {
     await this.ensureToken();
 
     const url = `${this.cachedServer}${path}`;
-    const response = await fetch(url, {
+    const response = await this.fetchWithQuota(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -552,7 +556,7 @@ export class LinnworksApiClient {
     if (response.status === 401) {
       this.cachedToken = null;
       await this.ensureToken();
-      const retry = await fetch(url, {
+      const retry = await this.fetchWithQuota(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -573,6 +577,69 @@ export class LinnworksApiClient {
     }
 
     return response.json() as Promise<T>;
+  }
+
+  private async fetchWithQuota(
+    url: string,
+    init: RequestInit & { skipAuthRetry?: boolean } = {},
+  ): Promise<Response> {
+    const { skipAuthRetry: _skipAuthRetry, ...requestInit } = init;
+    let attempt = 0;
+
+    while (true) {
+      await this.waitForRateLimitSlot();
+      const response = await fetch(url, requestInit);
+
+      if (
+        response.status !== 429 ||
+        attempt >= this.config.retryAttempts
+      ) {
+        return response;
+      }
+
+      const retryAfterMs = this.retryAfterMs(response.headers.get('retry-after'));
+      const backoffMs =
+        this.config.retryBaseDelayMs * Math.max(1, 2 ** attempt);
+      const delayMs = Math.max(retryAfterMs ?? 0, backoffMs);
+
+      this.logger.warn(
+        `Linnworks API quota reached. Retrying in ${delayMs}ms (attempt ${attempt + 1}/${this.config.retryAttempts})`,
+      );
+
+      await sleep(delayMs);
+      attempt += 1;
+    }
+  }
+
+  private retryAfterMs(value: string | null): number | null {
+    if (!value) return null;
+    const seconds = Number(value);
+    if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+
+    const date = new Date(value).getTime();
+    if (Number.isFinite(date)) return Math.max(0, date - Date.now());
+    return null;
+  }
+
+  private async waitForRateLimitSlot(): Promise<void> {
+    const limit = Math.max(1, this.config.rateLimitPerMinute);
+    const now = Date.now();
+    const windowStart = now - 60_000;
+
+    while (
+      this.requestTimestamps.length > 0 &&
+      this.requestTimestamps[0] < windowStart
+    ) {
+      this.requestTimestamps.shift();
+    }
+
+    if (this.requestTimestamps.length >= limit) {
+      const waitMs = this.requestTimestamps[0] + 60_000 - now;
+      await sleep(Math.max(waitMs, 250));
+      return this.waitForRateLimitSlot();
+    }
+
+    this.requestTimestamps.push(now);
   }
 
   // ---------------------------------------------------------------------------

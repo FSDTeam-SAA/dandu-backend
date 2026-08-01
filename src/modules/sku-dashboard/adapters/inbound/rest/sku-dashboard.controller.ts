@@ -25,7 +25,6 @@ import { BrowseSkusService } from '../../../application/browse-skus.service';
 import { GetDashboardMetricsService } from '../../../application/get-dashboard-metrics.service';
 import { GetInventoryAlertsService } from '../../../application/get-inventory-alerts.service';
 import { LinnworksHistoricalSalesIngestionService } from '../../../application/linnworks-historical-sales-ingestion.service';
-import { RefreshLinnworksSkuService } from '../../../application/refresh-linnworks-sku.service';
 import { UpdateProductService } from '../../../application/update-product.service';
 import { LinnworksSyncQueue } from '../queue/linnworks-sync.queue';
 
@@ -40,7 +39,6 @@ export class SkuDashboardController {
     private readonly getDashboardMetricsService: GetDashboardMetricsService,
     private readonly getInventoryAlertsService: GetInventoryAlertsService,
     private readonly linnworksHistoricalSalesIngestionService: LinnworksHistoricalSalesIngestionService,
-    private readonly refreshLinnworksSkuService: RefreshLinnworksSkuService,
     private readonly linnworksSyncQueue: LinnworksSyncQueue,
     private readonly updateProductService: UpdateProductService,
   ) {}
@@ -52,7 +50,6 @@ export class SkuDashboardController {
   @ApiOperation({ summary: 'Get full SKU metrics by exact SKU' })
   @ApiResponse({ status: 200, description: 'SKU metrics retrieved successfully' })
   async search(@Query() query: SkuSearchQueryDto) {
-    await this.refreshLinnworksSkuService.execute(query.sku);
     const result = await this.getSkuMetricsService.execute(query.sku);
     return { message: 'SKU metrics retrieved successfully', data: result };
   }

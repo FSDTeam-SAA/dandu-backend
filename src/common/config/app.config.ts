@@ -105,7 +105,7 @@ const config: AppConfig = {
     10,
   ),
   linnworks_rate_limit_per_minute: parseInt(
-    process.env.LINNWORKS_RATE_LIMIT_PER_MINUTE || '145',
+    process.env.LINNWORKS_RATE_LIMIT_PER_MINUTE || '120',
     10,
   ),
   linnworks_daily_sync_cron: process.env.LINNWORKS_DAILY_SYNC_CRON || '0 */6 * * *',

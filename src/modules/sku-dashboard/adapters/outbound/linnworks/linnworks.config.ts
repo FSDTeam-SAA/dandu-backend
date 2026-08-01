@@ -8,6 +8,9 @@ export class LinnworksConfig {
   readonly installationToken: string;
   readonly initialSessionToken?: string;
   readonly initialServer: string;
+  readonly rateLimitPerMinute: number;
+  readonly retryAttempts: number;
+  readonly retryBaseDelayMs: number;
 
   constructor(config: ConfigService) {
     this.applicationId = config.getOrThrow<string>('LINNWORKS_APPLICATION_ID');
@@ -18,5 +21,17 @@ export class LinnworksConfig {
       config.getOrThrow<string>('LINNWORKS_INSTALLATION_ID');
     this.initialSessionToken = config.get<string>('LINNWORKS_SESSION_TOKEN');
     this.initialServer = config.get<string>('LINNWORKS_API_SERVER') ?? 'https://api.linnworks.net';
+    this.rateLimitPerMinute = parseInt(
+      config.get<string>('LINNWORKS_RATE_LIMIT_PER_MINUTE') ?? '120',
+      10,
+    );
+    this.retryAttempts = parseInt(
+      config.get<string>('LINNWORKS_RETRY_ATTEMPTS') ?? '3',
+      10,
+    );
+    this.retryBaseDelayMs = parseInt(
+      config.get<string>('LINNWORKS_RETRY_BASE_DELAY_MS') ?? '1000',
+      10,
+    );
   }
 }

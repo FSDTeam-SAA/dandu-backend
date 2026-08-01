@@ -622,6 +622,40 @@ export class LinnworksApiClient {
   }
 
   /**
+   * Fetch one inventory item by exact SKU. Linnworks search is keyword based,
+   * so filter the returned page to avoid refreshing a partial SKU match.
+   */
+  async getStockItemBySku(sku: string): Promise<LinnworksStockItem | null> {
+    const normalizedSku = normalizeSku(sku);
+    if (!normalizedSku) return null;
+
+    const result = await this.post<unknown>('/api/Stock/GetStockItemsFull', {
+      keyword: normalizedSku,
+      loadCompositeParents: false,
+      loadVariationParents: false,
+      entriesPerPage: 50,
+      pageNumber: 1,
+      dataRequirements: [
+        'StockLevels',
+        'Pricing',
+        'ChannelPrice',
+        'ExtendedProperties',
+        'Images',
+      ],
+      searchTypes: ['SKU'],
+    });
+
+    const items = this.normalizeArray<LinnworksStockItem>(result, ['Items']);
+    return (
+      items.find(
+        (item) =>
+          normalizeSku(item.ItemNumber).toUpperCase() ===
+          normalizedSku.toUpperCase(),
+      ) ?? null
+    );
+  }
+
+  /**
    * Fetch stock levels for all locations.
    */
   async getStockLevels(stockItemIds: string[]): Promise<LinnworksStockLevel[]> {

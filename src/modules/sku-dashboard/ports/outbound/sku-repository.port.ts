@@ -212,6 +212,10 @@ export interface ISkuRepository {
   upsertProducts(products: UpsertProductInput[]): Promise<number>;
   upsertStockBatch(stockRows: UpsertStockInput[]): Promise<number>;
   upsertChannels(channels: UpsertChannelInput[]): Promise<number>;
+  replaceSalesMetricsForSku(
+    sku: string,
+    metrics: UpsertSalesMetricInput[],
+  ): Promise<number>;
   replaceSalesMetrics(metrics: UpsertSalesMetricInput[]): Promise<number>;
 
   // Update mutable product fields

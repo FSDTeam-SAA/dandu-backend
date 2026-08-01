@@ -777,6 +777,82 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
     return channels.length;
   }
 
+  async replaceSalesMetricsForSku(
+    sku: string,
+    metrics: UpsertSalesMetricInput[],
+  ): Promise<number> {
+    const product = await this.prisma.product.findUnique({
+      where: { sku },
+      select: { id: true },
+    });
+    if (!product) return 0;
+
+    const channels = await this.prisma.productChannel.findMany({
+      where: { productId: product.id },
+      select: { id: true, productId: true, channel: true, country: true },
+    });
+    const channelByExactKey = new Map<string, { id: string }>();
+    const channelByFallbackKey = new Map<string, { id: string }>();
+
+    for (const channel of channels) {
+      const fallbackKey = [channel.productId, channel.channel].join('|');
+      if (!channelByFallbackKey.has(fallbackKey)) {
+        channelByFallbackKey.set(fallbackKey, channel);
+      }
+      channelByExactKey.set(
+        [channel.productId, channel.channel, channel.country ?? ''].join('|'),
+        channel,
+      );
+    }
+
+    const createOperations = metrics.map((metric) => {
+      const { periodStart, periodEnd } = normalizeMetricPeriod(
+        metric.periodStart,
+        metric.periodEnd,
+      );
+      const channel = metric.channel as SalesChannelType;
+      const country = metric.country ?? null;
+      const fulfillmentType = (metric.fulfillmentType as any) ?? 'ALL';
+      const productChannel =
+        channelByExactKey.get([product.id, channel, country ?? ''].join('|')) ??
+        channelByFallbackKey.get([product.id, channel].join('|'));
+
+      return this.prisma.productSalesMetric.create({
+        data: {
+          productId: product.id,
+          productChannelId: productChannel?.id,
+          channel,
+          country,
+          fulfillmentType,
+          periodStart,
+          periodEnd,
+          unitsSold: metric.unitsSold,
+          revenue: this.toDecimal(metric.revenue) || new Prisma.Decimal(0),
+          velocity: new Prisma.Decimal(
+            metric.unitsSold /
+              Math.max(
+                1,
+                Math.round(
+                  (periodEnd.getTime() - periodStart.getTime()) /
+                    (24 * 60 * 60 * 1000),
+                ),
+              ),
+          ),
+          currency: metric.currency || 'USD',
+        },
+      });
+    });
+
+    await this.prisma.$transaction([
+      this.prisma.productSalesMetric.deleteMany({
+        where: { productId: product.id },
+      }),
+      ...createOperations,
+    ]);
+
+    return metrics.length;
+  }
+
   async replaceSalesMetrics(metrics: UpsertSalesMetricInput[]): Promise<number> {
     const products = await this.productIdBySku(metrics.map((metric) => metric.sku));
 

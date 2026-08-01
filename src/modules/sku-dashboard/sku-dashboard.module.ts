@@ -25,6 +25,7 @@ import { GetDashboardMetricsService } from './application/get-dashboard-metrics.
 import { GetSkuMetricsService } from './application/get-sku-metrics.service';
 import { GetInventoryAlertsService } from './application/get-inventory-alerts.service';
 import { ImportReportService } from './application/import-report.service';
+import { RefreshLinnworksSkuService } from './application/refresh-linnworks-sku.service';
 import { UpdateProductService } from './application/update-product.service';
 import { LinnworksSyncService } from './application/linnworks-sync.service';
 import { LinnworksInventoryRefreshService } from './application/linnworks-inventory-refresh.service';
@@ -89,6 +90,12 @@ import { LinnworksApiClient } from './adapters/outbound/linnworks/linnworks-api.
       provide: GetSkuMetricsService,
       useFactory: (repo: ISkuRepository) => new GetSkuMetricsService(repo),
       inject: [SKU_REPOSITORY_TOKEN],
+    },
+    {
+      provide: RefreshLinnworksSkuService,
+      useFactory: (client: LinnworksApiClient, repo: ISkuRepository) =>
+        new RefreshLinnworksSkuService(client, repo),
+      inject: [LinnworksApiClient, SKU_REPOSITORY_TOKEN],
     },
     {
       provide: BrowseSkusService,

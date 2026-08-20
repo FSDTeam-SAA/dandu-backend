@@ -1,3 +1,8 @@
+export interface LinnworksLocationConfig {
+  country?: string;
+  locationType?: string;
+}
+
 export interface IAppConfig {
   readonly jwt_access_secret: string;
   readonly jwt_refresh_secret: string;
@@ -18,6 +23,7 @@ export interface IAppConfig {
   readonly linnworks_retry_base_delay_ms: number;
   readonly linnworks_rate_limit_per_minute: number;
   readonly linnworks_daily_sync_cron: string;
+  readonly linnworks_location_map: Record<string, LinnworksLocationConfig>;
 }
 
 export const APP_CONFIG_TOKEN = Symbol('IAppConfig');

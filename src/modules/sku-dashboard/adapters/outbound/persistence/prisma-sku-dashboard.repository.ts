@@ -16,6 +16,14 @@ import {
 import { SkuMetricsDomainModel } from '../../../domain/models/product.domain';
 import { SkuDashboardMapper } from './mappers/sku-dashboard.mapper';
 
+const inBatches = <T>(items: T[], size: number): T[][] => {
+  const batches: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    batches.push(items.slice(index, index + size));
+  }
+  return batches;
+};
+
 @Injectable()
 export class PrismaSkuDashboardRepository implements ISkuRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -97,7 +105,9 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
     };
   }
 
-  async getDashboardMetrics(periodDays: number): Promise<DashboardMetricsResult> {
+  async getDashboardMetrics(
+    periodDays: number,
+  ): Promise<DashboardMetricsResult> {
     const periodEnd = new Date();
     const periodStart = new Date(periodEnd);
     periodStart.setDate(periodStart.getDate() - periodDays);
@@ -133,7 +143,10 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
 
     for (const stock of stockRows) {
       const key = `${stock.country} ${stock.locationType}`;
-      stockByLocation.set(key, (stockByLocation.get(key) || 0) + stock.available);
+      stockByLocation.set(
+        key,
+        (stockByLocation.get(key) || 0) + stock.available,
+      );
     }
 
     const fills = ['#047857', '#34d399', '#0f172a', '#64748b', '#f59e0b'];
@@ -231,13 +244,14 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
   }
 
   async upsertProducts(products: UpsertProductInput[]): Promise<number> {
-    for (const product of products) {
-      await this.prisma.product.upsert({
+    const operations = products.map((product) =>
+      this.prisma.product.upsert({
         where: { sku: product.sku },
         create: {
           sku: product.sku,
           title: product.title,
           brand: product.brand,
+          category: product.category,
           status: product.status || 'ACTIVE',
           cost: this.toDecimal(product.cost),
           currency: product.currency || 'USD',
@@ -252,6 +266,7 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
         update: {
           title: product.title,
           brand: product.brand,
+          category: product.category,
           status: product.status || 'ACTIVE',
           cost: this.toDecimal(product.cost),
           currency: product.currency || 'USD',
@@ -263,142 +278,199 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
           productUrl: product.productUrl,
           lastSyncedAt: product.lastSyncedAt,
         },
-      });
+      }),
+    );
+    for (const batch of inBatches(operations, 100)) {
+      await this.prisma.$transaction(batch);
     }
-
     return products.length;
   }
 
-  async upsertStock(stockRows: UpsertStockInput[]): Promise<number> {
-    const products = await this.productIdBySku(stockRows.map((row) => row.sku));
+  async upsertStock(
+    stockRows: UpsertStockInput[],
+    syncedSkus: string[],
+  ): Promise<number> {
+    const products = await this.productIdBySku(syncedSkus);
+    const sourceIdsByProduct = new Map<string, string[]>();
+    const operations: Prisma.PrismaPromise<unknown>[] = [];
 
     for (const stock of stockRows) {
       const productId = products.get(stock.sku);
       if (!productId) continue;
-
-      const existing = await this.prisma.productStock.findFirst({
-        where: {
-          productId,
-          country: stock.country,
-          locationType: stock.locationType,
-          warehouse: stock.warehouse || null,
-        },
-      });
-
-      const data = {
-        quantity: stock.quantity,
-        reserved: stock.reserved,
-        inbound: stock.inbound,
-        available: stock.available,
-      };
-
-      if (existing) {
-        await this.prisma.productStock.update({
-          where: { id: existing.id },
-          data,
-        });
-      } else {
-        await this.prisma.productStock.create({
-          data: {
+      const sourceIds = sourceIdsByProduct.get(productId) || [];
+      sourceIds.push(stock.sourceLocationId);
+      sourceIdsByProduct.set(productId, sourceIds);
+      operations.push(
+        this.prisma.productStock.upsert({
+          where: {
+            productId_sourceLocationId: {
+              productId,
+              sourceLocationId: stock.sourceLocationId,
+            },
+          },
+          create: {
             productId,
+            sourceLocationId: stock.sourceLocationId,
             country: stock.country,
             locationType: stock.locationType,
             warehouse: stock.warehouse || null,
-            ...data,
+            quantity: stock.quantity,
+            reserved: stock.reserved,
+            inbound: stock.inbound,
+            available: stock.available,
           },
-        });
-      }
+          update: {
+            country: stock.country,
+            locationType: stock.locationType,
+            warehouse: stock.warehouse || null,
+            quantity: stock.quantity,
+            reserved: stock.reserved,
+            inbound: stock.inbound,
+            available: stock.available,
+          },
+        }),
+      );
     }
-
+    for (const productId of products.values()) {
+      const sourceIds = sourceIdsByProduct.get(productId) || [];
+      operations.push(
+        this.prisma.productStock.deleteMany({
+          where: {
+            productId,
+            OR: [
+              { sourceLocationId: null },
+              { sourceLocationId: { notIn: sourceIds } },
+            ],
+          },
+        }),
+      );
+    }
+    for (const batch of inBatches(operations, 100))
+      await this.prisma.$transaction(batch);
     return stockRows.length;
   }
 
-  async upsertChannels(channels: UpsertChannelInput[]): Promise<number> {
-    const products = await this.productIdBySku(channels.map((row) => row.sku));
-
+  async upsertChannels(
+    channels: UpsertChannelInput[],
+    syncedSkus: string[],
+  ): Promise<number> {
+    const products = await this.productIdBySku(syncedSkus);
+    const syncKeysByProduct = new Map<string, string[]>();
+    const operations: Prisma.PrismaPromise<unknown>[] = [];
     for (const channel of channels) {
       const productId = products.get(channel.sku);
       if (!productId) continue;
-
-      const existing = await this.prisma.productChannel.findFirst({
-        where: {
-          productId,
-          channel: channel.channel,
-          country: channel.country || null,
-          asin: channel.asin || null,
-          listingId: channel.listingId || null,
-        },
-      });
-
-      const data = {
-        price: this.toDecimal(channel.price),
-        currency: channel.currency || 'USD',
-        isActive: channel.isActive ?? true,
-      };
-
-      if (existing) {
-        await this.prisma.productChannel.update({
-          where: { id: existing.id },
-          data,
-        });
-      } else {
-        await this.prisma.productChannel.create({
-          data: {
+      const syncKeys = syncKeysByProduct.get(productId) || [];
+      syncKeys.push(channel.syncKey);
+      syncKeysByProduct.set(productId, syncKeys);
+      operations.push(
+        this.prisma.productChannel.upsert({
+          where: { productId_syncKey: { productId, syncKey: channel.syncKey } },
+          create: {
             productId,
             channel: channel.channel,
             country: channel.country || null,
             asin: channel.asin || null,
             listingId: channel.listingId || null,
-            ...data,
+            source: channel.source || null,
+            subSource: channel.subSource || null,
+            sourceRowId: channel.sourceRowId || null,
+            externalReferenceId: channel.externalReferenceId || null,
+            ignoreSync: channel.ignoreSync ?? false,
+            syncKey: channel.syncKey,
+            price: this.toDecimal(channel.price),
+            currency: channel.currency || 'USD',
+            isActive: channel.isActive ?? true,
           },
-        });
-      }
+          update: {
+            channel: channel.channel,
+            country: channel.country || null,
+            asin: channel.asin || null,
+            listingId: channel.listingId || null,
+            source: channel.source || null,
+            subSource: channel.subSource || null,
+            sourceRowId: channel.sourceRowId || null,
+            externalReferenceId: channel.externalReferenceId || null,
+            ignoreSync: channel.ignoreSync ?? false,
+            price: this.toDecimal(channel.price),
+            currency: channel.currency || 'USD',
+            isActive: channel.isActive ?? true,
+          },
+        }),
+      );
     }
-
+    for (const productId of products.values()) {
+      const syncKeys = syncKeysByProduct.get(productId) || [];
+      operations.push(
+        this.prisma.productChannel.deleteMany({
+          where: {
+            productId,
+            OR: [{ syncKey: null }, { syncKey: { notIn: syncKeys } }],
+          },
+        }),
+      );
+    }
+    for (const batch of inBatches(operations, 100))
+      await this.prisma.$transaction(batch);
     return channels.length;
   }
 
-  async replaceSalesMetrics(metrics: UpsertSalesMetricInput[]): Promise<number> {
-    const products = await this.productIdBySku(metrics.map((metric) => metric.sku));
-
+  async replaceSalesMetrics(
+    metrics: UpsertSalesMetricInput[],
+  ): Promise<number> {
+    const products = await this.productIdBySku(
+      metrics.map((metric) => metric.sku),
+    );
+    const operations: Prisma.PrismaPromise<unknown>[] = [];
     for (const metric of metrics) {
       const productId = products.get(metric.sku);
       if (!productId) continue;
-
-      await this.prisma.productSalesMetric.deleteMany({
-        where: {
-          productId,
-          channel: metric.channel,
-          country: metric.country || null,
-          periodStart: metric.periodStart,
-          periodEnd: metric.periodEnd,
-        },
-      });
-
-      await this.prisma.productSalesMetric.create({
-        data: {
-          productId,
-          channel: metric.channel,
-          country: metric.country || null,
-          periodStart: metric.periodStart,
-          periodEnd: metric.periodEnd,
-          unitsSold: metric.unitsSold,
-          revenue: this.toDecimal(metric.revenue) || new Prisma.Decimal(0),
-          velocity: new Prisma.Decimal(
-            metric.unitsSold /
-              Math.max(
-                1,
-                Math.ceil(
-                  (metric.periodEnd.getTime() - metric.periodStart.getTime()) /
-                    (24 * 60 * 60 * 1000),
-                ),
-              ),
+      const velocity = new Prisma.Decimal(
+        metric.unitsSold /
+          Math.max(
+            1,
+            Math.ceil(
+              (metric.periodEnd.getTime() - metric.periodStart.getTime()) /
+                (24 * 60 * 60 * 1000),
+            ),
           ),
-          currency: metric.currency || 'USD',
-        },
-      });
+      );
+      operations.push(
+        this.prisma.productSalesMetric.upsert({
+          where: { productId_syncKey: { productId, syncKey: metric.syncKey } },
+          create: {
+            productId,
+            channel: metric.channel,
+            country: metric.country || null,
+            fulfillmentType: metric.fulfillmentType,
+            source: metric.source || null,
+            subSource: metric.subSource || null,
+            syncKey: metric.syncKey,
+            periodStart: metric.periodStart,
+            periodEnd: metric.periodEnd,
+            unitsSold: metric.unitsSold,
+            revenue: this.toDecimal(metric.revenue) || new Prisma.Decimal(0),
+            velocity,
+            currency: metric.currency || 'USD',
+          },
+          update: {
+            channel: metric.channel,
+            country: metric.country || null,
+            fulfillmentType: metric.fulfillmentType,
+            source: metric.source || null,
+            subSource: metric.subSource || null,
+            periodStart: metric.periodStart,
+            periodEnd: metric.periodEnd,
+            unitsSold: metric.unitsSold,
+            revenue: this.toDecimal(metric.revenue) || new Prisma.Decimal(0),
+            velocity,
+            currency: metric.currency || 'USD',
+          },
+        }),
+      );
     }
-
+    for (const batch of inBatches(operations, 100))
+      await this.prisma.$transaction(batch);
     return metrics.length;
   }
 
@@ -442,13 +514,14 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
     return new Map(products.map((product) => [product.sku, product.id]));
   }
 
-  async updateProduct(sku: string, data: Partial<UpsertProductInput>): Promise<void> {
+  async updateProduct(
+    sku: string,
+    data: Pick<UpsertProductInput, 'material' | 'thickness' | 'packQty'>,
+  ): Promise<void> {
     const updateData: Prisma.ProductUpdateInput = {};
-    if (data.cost !== undefined) updateData.cost = this.toDecimal(data.cost);
-    if (data.weight !== undefined) updateData.weight = this.toDecimal(data.weight);
-    if (data.length !== undefined) updateData.length = this.toDecimal(data.length);
-    if (data.width !== undefined) updateData.width = this.toDecimal(data.width);
-    if (data.height !== undefined) updateData.height = this.toDecimal(data.height);
+    if (data.material !== undefined) updateData.material = data.material;
+    if (data.thickness !== undefined) updateData.thickness = data.thickness;
+    if (data.packQty !== undefined) updateData.packQty = data.packQty;
 
     if (Object.keys(updateData).length > 0) {
       await this.prisma.product.update({
@@ -459,6 +532,8 @@ export class PrismaSkuDashboardRepository implements ISkuRepository {
   }
 
   private toDecimal(value?: number | null): Prisma.Decimal | null {
-    return value === undefined || value === null ? null : new Prisma.Decimal(value);
+    return value === undefined || value === null
+      ? null
+      : new Prisma.Decimal(value);
   }
 }

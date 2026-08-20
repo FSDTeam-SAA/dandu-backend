@@ -13,6 +13,12 @@ export interface LinnworksStockItem {
     FullSource?: string;
     IsMain?: boolean;
   }>;
+  CategoryName?: string;
+  ItemExtendedProperties?: Array<{
+    ProperyName?: string;
+    PropertyName?: string;
+    PropertyValue?: string | number | null;
+  }>;
   StockLevels?: Array<{
     StockLevel?: number;
     InOrderBook?: number;
@@ -20,6 +26,7 @@ export interface LinnworksStockItem {
     Due?: number;
     Available?: number;
     Location?: {
+      StockLocationId?: string;
       LocationName?: string;
       LocationTag?: string;
       IsFulfillmentCenter?: boolean;
@@ -34,54 +41,59 @@ export interface LinnworksStockItem {
 }
 
 export interface LinnworksChannelSku {
-  StockItemId?: string;
+  ChannelSKURowId?: string;
   Source?: string;
   SubSource?: string;
-  ChannelSKU?: string;
   SKU?: string;
-  ASIN?: string;
+  ChannelReferenceId?: string;
+  IgnoreSync?: boolean;
 }
 
-export interface LinnworksProcessedOrder {
-  pkOrderID?: string;
-  dProcessedOn?: string;
-  dReceivedDate?: string;
-  Source?: string;
-  SubSource?: string;
-  cCountry?: string;
-  cCurrency?: string;
+export interface LinnworksChannelSkuBatch {
+  StockItemId?: string;
+  ChannelSkus?: LinnworksChannelSku[];
 }
 
-export interface LinnworksOrderItem {
-  fkOrderID?: string;
-  OrderId?: string;
+export interface LinnworksV2OrderItem {
   SKU?: string;
   ItemNumber?: string;
   Quantity?: number;
-  nQty?: number;
-  Cost?: number;
   PricePerUnit?: number;
-  LineTotal?: number;
+  IsService?: boolean;
+  IsUnlinked?: boolean;
 }
 
-export interface LinnworksPagedOrders {
-  PageNumber: number;
-  EntriesPerPage: number;
-  TotalEntries: number;
-  TotalPages: number;
-  Data: LinnworksProcessedOrder[];
+export interface LinnworksV2Order {
+  FulfilmentLocationId?: string;
+  ProcessedOn?: string;
+  GeneralInfo?: {
+    Source?: string;
+    SubSource?: string;
+    Currency?: string;
+  };
+  TotalsInfo?: {
+    Currency?: string;
+  };
+  Items?: LinnworksV2OrderItem[];
+}
+
+export interface LinnworksV2OrdersPage {
+  NextSearchToken?: string | null;
+  OpenOrders?: LinnworksV2Order[];
+  ProcessedOrders?: LinnworksV2Order[];
+  TotalOrders?: number;
 }
 
 export interface ILinnworksClient {
   getStockItemsFull(pageNumber: number): Promise<LinnworksStockItem[]>;
-  getChannelSkus(inventoryItemIds: string[]): Promise<LinnworksChannelSku[]>;
-  searchProcessedOrdersPaged(input: {
+  getChannelSkus(
+    inventoryItemIds: string[],
+  ): Promise<LinnworksChannelSkuBatch[]>;
+  getProcessedOrders(input: {
     from: Date;
     to: Date;
-    pageNum: number;
-  }): Promise<LinnworksPagedOrders>;
-  getOrderItemsByOrderIds(orderIds: string[]): Promise<LinnworksOrderItem[]>;
+    nextSearchToken?: string | null;
+  }): Promise<LinnworksV2OrdersPage>;
 }
 
 export const LINNWORKS_CLIENT_TOKEN = Symbol('ILinnworksClient');
-

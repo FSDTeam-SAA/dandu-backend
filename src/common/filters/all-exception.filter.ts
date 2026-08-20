@@ -79,13 +79,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
       error = exception.name;
     }
 
-    // Generic JS Error
-    else if (exception instanceof Error) {
-      // statusCode = exception.;
-      message = exception.message;
-      error = exception.name;
-    }
-
     response.status(statusCode).json({
       success: false,
       statusCode,
@@ -93,10 +86,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       error,
       timestamp: new Date().toISOString(),
       path: request.url,
-      stack:
-        process.env.NODE_ENV === 'development' && exception instanceof Error
-          ? exception.stack
-          : null,
+      stack: null,
     });
   }
 

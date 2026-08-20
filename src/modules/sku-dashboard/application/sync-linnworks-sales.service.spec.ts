@@ -1,49 +1,51 @@
 import { ILinnworksClient } from '../ports/outbound/linnworks-client.port';
-import { ISkuRepository, UpsertSalesMetricInput } from '../ports/outbound/sku-repository.port';
+import {
+  ISkuRepository,
+  UpsertSalesMetricInput,
+} from '../ports/outbound/sku-repository.port';
 import { SyncLinnworksSalesService } from './sync-linnworks-sales.service';
 
 describe('SyncLinnworksSalesService', () => {
-  it('chunks processed-order searches into 90-day windows and stores rolling metrics', async () => {
-    const searchedRanges: Array<{ from: Date; to: Date; pageNum: number }> = [];
+  it('uses v2 embedded items, continuation tokens, source country, and mapped fulfillment', async () => {
     const metrics: UpsertSalesMetricInput[] = [];
     const now = new Date();
-    const orderId = '00000000-0000-0000-0000-000000000001';
-
+    const getProcessedOrders = jest
+      .fn()
+      .mockResolvedValueOnce({
+        NextSearchToken: 'page-2',
+        ProcessedOrders: [
+          {
+            ProcessedOn: now.toISOString(),
+            FulfilmentLocationId: 'ca-fba',
+            GeneralInfo: { Source: 'AMAZON', SubSource: 'Amazon Canada' },
+            TotalsInfo: { Currency: 'CAD' },
+            Items: [{ SKU: 'SKU-1', Quantity: 2, PricePerUnit: 10 }],
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        NextSearchToken: null,
+        ProcessedOrders: [
+          {
+            ProcessedOn: now.toISOString(),
+            GeneralInfo: { Source: 'AMAZON FBA', SubSource: 'Amazon US' },
+            Items: [
+              { SKU: 'SKU-1', Quantity: 1, PricePerUnit: 5 },
+              {
+                SKU: 'service',
+                Quantity: 1,
+                PricePerUnit: 99,
+                IsService: true,
+              },
+            ],
+          },
+        ],
+      });
     const linnworksClient: ILinnworksClient = {
       getStockItemsFull: jest.fn(),
       getChannelSkus: jest.fn(),
-      searchProcessedOrdersPaged: jest.fn(async (input) => {
-        searchedRanges.push(input);
-
-        return {
-          PageNumber: input.pageNum,
-          EntriesPerPage: 200,
-          TotalEntries: input.pageNum === 1 ? 1 : 0,
-          TotalPages: 1,
-          Data:
-            searchedRanges.length === 1
-              ? [
-                  {
-                    pkOrderID: orderId,
-                    dProcessedOn: now.toISOString(),
-                    Source: 'AMAZON',
-                    cCountry: 'US',
-                    cCurrency: 'USD',
-                  },
-                ]
-              : [],
-        };
-      }),
-      getOrderItemsByOrderIds: jest.fn(async () => [
-        {
-          fkOrderID: orderId,
-          SKU: 'SKU-1',
-          Quantity: 2,
-          PricePerUnit: 10,
-        },
-      ]),
+      getProcessedOrders,
     };
-
     const skuRepository = {
       replaceSalesMetrics: jest.fn(async (input: UpsertSalesMetricInput[]) => {
         metrics.push(...input);
@@ -51,19 +53,49 @@ describe('SyncLinnworksSalesService', () => {
       }),
     } as unknown as ISkuRepository;
 
-    const service = new SyncLinnworksSalesService(linnworksClient, skuRepository);
-    const result = await service.execute(365);
+    const result = await new SyncLinnworksSalesService(
+      linnworksClient,
+      skuRepository,
+      { 'ca-fba': { country: 'CA', locationType: 'FBA' } },
+    ).execute(365);
 
-    expect(searchedRanges.length).toBeGreaterThan(1);
-    expect(
-      searchedRanges.every(
-        (range) => range.to.getTime() - range.from.getTime() <= 90 * 24 * 60 * 60 * 1000,
-      ),
-    ).toBe(true);
-    expect(result.orderItems).toBe(1);
-    expect(metrics).toHaveLength(4);
-    expect(metrics.map((metric) => metric.unitsSold)).toEqual([2, 2, 2, 2]);
-    expect(metrics.map((metric) => metric.revenue)).toEqual([20, 20, 20, 20]);
+    expect(getProcessedOrders).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({
+      orders: 2,
+      orderItems: 3,
+      skippedItems: 1,
+      pages: 2,
+    });
+    expect(metrics).toHaveLength(8);
+    expect(metrics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          country: 'CA',
+          fulfillmentType: 'FBA',
+          revenue: 20,
+          currency: 'CAD',
+        }),
+        expect.objectContaining({
+          country: 'US',
+          fulfillmentType: 'FBA',
+          revenue: 5,
+        }),
+      ]),
+    );
+  });
+
+  it('fails safely when the v2 page is malformed instead of treating it as an empty final page', async () => {
+    const linnworksClient: ILinnworksClient = {
+      getStockItemsFull: jest.fn(),
+      getChannelSkus: jest.fn(),
+      getProcessedOrders: jest.fn(async () => ({ NextSearchToken: null })),
+    };
+    const skuRepository = {
+      replaceSalesMetrics: jest.fn(),
+    } as unknown as ISkuRepository;
+
+    await expect(
+      new SyncLinnworksSalesService(linnworksClient, skuRepository).execute(30),
+    ).rejects.toThrow('malformed');
   });
 });
-

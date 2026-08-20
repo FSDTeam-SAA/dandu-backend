@@ -22,6 +22,7 @@ const config: IAppConfig = {
   linnworks_retry_base_delay_ms: 1,
   linnworks_rate_limit_per_minute: 150,
   linnworks_daily_sync_cron: '0 3 * * *',
+  linnworks_location_map: {},
 };
 
 const jsonResponse = (body: unknown): Response =>
@@ -95,7 +96,7 @@ describe('LinnworksClient', () => {
     });
   });
 
-  it('sends processed-order search as a JSON request body', async () => {
+  it('requests processed orders from v2 with the continuation token', async () => {
     const fetchMock = jest
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce(
@@ -107,11 +108,10 @@ describe('LinnworksClient', () => {
       )
       .mockResolvedValueOnce(
         jsonResponse({
-          PageNumber: 1,
-          EntriesPerPage: 200,
-          TotalEntries: 0,
-          TotalPages: 0,
-          Data: [],
+          NextSearchToken: null,
+          OpenOrders: [],
+          ProcessedOrders: [],
+          TotalOrders: 0,
         }),
       );
 
@@ -119,21 +119,19 @@ describe('LinnworksClient', () => {
     const from = new Date('2026-01-01T00:00:00.000Z');
     const to = new Date('2026-01-02T00:00:00.000Z');
 
-    await client.searchProcessedOrdersPaged({ from, to, pageNum: 1 });
+    await client.getProcessedOrders({
+      from,
+      to,
+      nextSearchToken: 'next-page',
+    });
 
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      'https://assigned-api.linnworks.net/v2/orders?fromDate=2026-01-01T00%3A00%3A00.000Z&toDate=2026-01-02T00%3A00%3A00.000Z&includeProcessed=true&entriesPerPage=200&searchToken=next-page',
+    );
     expect(fetchMock.mock.calls[1][1]).toMatchObject({
+      method: 'GET',
       headers: expect.objectContaining({
-        'content-type': 'application/json',
-      }),
-      body: JSON.stringify({
-        from: from.toISOString(),
-        to: to.toISOString(),
-        dateType: 'PROCESSED',
-        searchField: '',
-        exactMatch: false,
-        searchTerm: '',
-        pageNum: 1,
-        numEntriesPerPage: 200,
+        Authorization: 'session-token',
       }),
     });
   });
@@ -170,8 +168,8 @@ describe('LinnworksClient', () => {
     });
   });
 
-  it('returns an empty processed-order page when Linnworks reports no items', async () => {
-    jest
+  it('retains nested channel-sku response wrappers', async () => {
+    const fetchMock = jest
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce(
         jsonResponse({
@@ -180,22 +178,35 @@ describe('LinnworksClient', () => {
           Ttl: 30,
         }),
       )
-      .mockResolvedValueOnce(textResponse(400, 'No items found'));
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            StockItemId: 'stock-1',
+            ChannelSkus: [
+              {
+                ChannelSKURowId: 'row-1',
+                Source: 'AMAZON',
+                SubSource: 'Amazon US',
+                ChannelReferenceId: 'B012345678',
+                IgnoreSync: true,
+              },
+            ],
+          },
+        ]),
+      );
 
     const client = new LinnworksClient(config);
-
-    await expect(
-      client.searchProcessedOrdersPaged({
-        from: new Date('2026-01-01T00:00:00.000Z'),
-        to: new Date('2026-01-02T00:00:00.000Z'),
-        pageNum: 4,
-      }),
-    ).resolves.toEqual({
-      PageNumber: 4,
-      EntriesPerPage: 200,
-      TotalEntries: 0,
-      TotalPages: 0,
-      Data: [],
-    });
+    await expect(client.getChannelSkus(['stock-1'])).resolves.toEqual([
+      {
+        StockItemId: 'stock-1',
+        ChannelSkus: [
+          expect.objectContaining({
+            ChannelReferenceId: 'B012345678',
+            IgnoreSync: true,
+          }),
+        ],
+      },
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

@@ -9,7 +9,7 @@ import {
 } from './sync-linnworks-sales.service';
 
 export interface LinnworksSyncResult {
-  status: 'COMPLETED' | 'FAILED';
+  status: 'COMPLETED' | 'PARTIAL_SUCCESS' | 'FAILED';
   updatedSkus: number;
   updatedStock: number;
   updatedListings: number;
@@ -17,6 +17,7 @@ export interface LinnworksSyncResult {
   durationMs: number;
   catalog?: CatalogSyncResult;
   sales?: SalesSyncResult;
+  phaseErrors: Array<{ phase: 'CATALOG' | 'SALES'; message: string }>;
 }
 
 export class RunLinnworksDailySyncService {
@@ -34,18 +35,38 @@ export class RunLinnworksDailySyncService {
       metadata: { state: 'RUNNING' },
     });
 
+    let catalog: CatalogSyncResult;
     try {
-      const catalog = await this.catalogSync.execute();
+      catalog = await this.catalogSync.execute();
+    } catch {
+      const durationMs = Date.now() - startedAt;
+      await this.skuRepository.updateSyncLog(logId, {
+        provider: 'LINNWORKS',
+        status: 'FAILED',
+        failedRows: 1,
+        errorMessage: 'Catalog sync failed',
+        metadata: { durationMs, failedPhase: 'CATALOG' },
+      });
+      return {
+        status: 'FAILED',
+        updatedSkus: 0,
+        updatedStock: 0,
+        updatedListings: 0,
+        syncedAt: new Date().toISOString(),
+        durationMs,
+        phaseErrors: [{ phase: 'CATALOG', message: 'Catalog sync failed' }],
+      };
+    }
+
+    try {
       const sales = await this.salesSync.execute(365);
       const durationMs = Date.now() - startedAt;
-
       await this.skuRepository.updateSyncLog(logId, {
         provider: 'LINNWORKS',
         status: 'SUCCESS',
         processedRows: catalog.products + catalog.stockRows + sales.orderItems,
         metadata: { catalog, sales, durationMs },
       });
-
       return {
         status: 'COMPLETED',
         updatedSkus: catalog.products,
@@ -55,21 +76,28 @@ export class RunLinnworksDailySyncService {
         durationMs,
         catalog,
         sales,
+        phaseErrors: [],
       };
-    } catch (error) {
+    } catch {
       const durationMs = Date.now() - startedAt;
-
       await this.skuRepository.updateSyncLog(logId, {
         provider: 'LINNWORKS',
-        status: 'FAILED',
+        status: 'PARTIAL_SUCCESS',
+        processedRows: catalog.products + catalog.stockRows,
         failedRows: 1,
-        errorMessage:
-          error instanceof Error ? error.message : 'Linnworks sync failed',
-        metadata: { durationMs },
+        errorMessage: 'Sales sync failed after catalog sync completed',
+        metadata: { catalog, durationMs, failedPhase: 'SALES' },
       });
-
-      throw error;
+      return {
+        status: 'PARTIAL_SUCCESS',
+        updatedSkus: catalog.products,
+        updatedStock: catalog.stockRows,
+        updatedListings: catalog.channels,
+        syncedAt: new Date().toISOString(),
+        durationMs,
+        catalog,
+        phaseErrors: [{ phase: 'SALES', message: 'Sales sync failed' }],
+      };
     }
   }
 }
-

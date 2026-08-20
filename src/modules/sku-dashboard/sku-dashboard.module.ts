@@ -1,6 +1,10 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import {
+  APP_CONFIG_TOKEN,
+  IAppConfig,
+} from '../../common/domain/interfaces/app-config.interface';
 import { SkuDashboardController } from './adapters/inbound/rest/sku-dashboard.controller';
 import { ImportController } from './adapters/inbound/rest/import.controller';
 import { LinnworksSyncProcessor } from './adapters/inbound/queue/linnworks-sync.processor';
@@ -77,16 +81,28 @@ import { UpdateProductService } from './application/update-product.service';
       useFactory: (
         linnworksClient: ILinnworksClient,
         skuRepository: ISkuRepository,
-      ) => new SyncLinnworksCatalogService(linnworksClient, skuRepository),
-      inject: [LINNWORKS_CLIENT_TOKEN, SKU_REPOSITORY_TOKEN],
+        config: IAppConfig,
+      ) =>
+        new SyncLinnworksCatalogService(
+          linnworksClient,
+          skuRepository,
+          config.linnworks_location_map,
+        ),
+      inject: [LINNWORKS_CLIENT_TOKEN, SKU_REPOSITORY_TOKEN, APP_CONFIG_TOKEN],
     },
     {
       provide: SyncLinnworksSalesService,
       useFactory: (
         linnworksClient: ILinnworksClient,
         skuRepository: ISkuRepository,
-      ) => new SyncLinnworksSalesService(linnworksClient, skuRepository),
-      inject: [LINNWORKS_CLIENT_TOKEN, SKU_REPOSITORY_TOKEN],
+        config: IAppConfig,
+      ) =>
+        new SyncLinnworksSalesService(
+          linnworksClient,
+          skuRepository,
+          config.linnworks_location_map,
+        ),
+      inject: [LINNWORKS_CLIENT_TOKEN, SKU_REPOSITORY_TOKEN, APP_CONFIG_TOKEN],
     },
     {
       provide: RunLinnworksDailySyncService,
@@ -94,7 +110,8 @@ import { UpdateProductService } from './application/update-product.service';
         catalogSync: SyncLinnworksCatalogService,
         salesSync: SyncLinnworksSalesService,
         skuRepository: ISkuRepository,
-      ) => new RunLinnworksDailySyncService(catalogSync, salesSync, skuRepository),
+      ) =>
+        new RunLinnworksDailySyncService(catalogSync, salesSync, skuRepository),
       inject: [
         SyncLinnworksCatalogService,
         SyncLinnworksSalesService,

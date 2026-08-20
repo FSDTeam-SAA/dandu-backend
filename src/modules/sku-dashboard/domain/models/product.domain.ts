@@ -1,10 +1,17 @@
 export type ProductStatus = 'ACTIVE' | 'INACTIVE' | 'DISCONTINUED';
-export type StockLocationType = 'FBA' | 'FBM' | 'WAREHOUSE' | 'THIRD_PARTY';
+export type StockLocationType =
+  | 'FBA'
+  | 'FBM'
+  | 'WAREHOUSE'
+  | 'THIRD_PARTY'
+  | 'UNKNOWN';
+export type SalesFulfillmentType = 'FBA' | 'MFN' | 'UNKNOWN';
 export type SalesChannelType =
   | 'AMAZON'
   | 'EBAY'
   | 'WALMART'
   | 'SHOPIFY'
+  | 'ETSY'
   | 'WEBSITE'
   | 'OTHER';
 
@@ -13,10 +20,14 @@ export interface ProductDomainModel {
   sku: string;
   title: string;
   brand: string | null;
+  category: string | null;
   status: ProductStatus;
   cost: number | null;
   currency: string;
   weight: number | null;
+  material: string | null;
+  thickness: string | null;
+  packQty: number | null;
   dimensions: {
     length: number | null;
     width: number | null;
@@ -28,7 +39,8 @@ export interface ProductDomainModel {
 }
 
 export interface ProductStockDomainModel {
-  country: string;
+  sourceLocationId: string | null;
+  country: string | null;
   locationType: StockLocationType;
   warehouse: string | null;
   quantity: number;
@@ -42,6 +54,11 @@ export interface ProductChannelDomainModel {
   country: string | null;
   asin: string | null;
   listingId: string | null;
+  source: string | null;
+  subSource: string | null;
+  sourceRowId: string | null;
+  externalReferenceId: string | null;
+  ignoreSync: boolean;
   price: number | null;
   currency: string;
   isActive: boolean;
@@ -50,6 +67,9 @@ export interface ProductChannelDomainModel {
 export interface ProductSalesMetricDomainModel {
   channel: SalesChannelType;
   country: string | null;
+  fulfillmentType: SalesFulfillmentType;
+  source: string | null;
+  subSource: string | null;
   periodStart: Date;
   periodEnd: Date;
   unitsSold: number;

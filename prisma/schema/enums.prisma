@@ -245,6 +245,7 @@ enum StockLocationType {
     FBM
     WAREHOUSE
     THIRD_PARTY
+    UNKNOWN
 }
 
 enum SalesChannelType {
@@ -252,8 +253,15 @@ enum SalesChannelType {
     EBAY
     WALMART
     SHOPIFY
+    ETSY
     WEBSITE
     OTHER
+}
+
+enum SalesFulfillmentType {
+    FBA
+    MFN
+    UNKNOWN
 }
 
 enum ImportStatus {

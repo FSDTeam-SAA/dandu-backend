@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { LinnworksLocationConfig } from '../domain/interfaces/app-config.interface';
 
 interface AppConfig {
   jwt_access_secret: string;
@@ -32,6 +33,7 @@ interface AppConfig {
   linnworks_retry_base_delay_ms: number;
   linnworks_rate_limit_per_minute: number;
   linnworks_daily_sync_cron: string;
+  linnworks_location_map: Record<string, LinnworksLocationConfig>;
 }
 
 const parseCsv = (value?: string): string[] =>
@@ -42,10 +44,51 @@ const parseCsv = (value?: string): string[] =>
         .filter(Boolean)
     : [];
 
+const parseLinnworksLocationMap = (
+  value?: string,
+): Record<string, LinnworksLocationConfig> => {
+  if (!value) return {};
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+      return {};
+
+    return Object.fromEntries(
+      Object.entries(parsed).flatMap(([locationId, config]) => {
+        if (!config || typeof config !== 'object' || Array.isArray(config))
+          return [];
+        const record = config as Record<string, unknown>;
+        const country =
+          typeof record.country === 'string' ? record.country : undefined;
+        const locationType =
+          typeof record.locationType === 'string'
+            ? record.locationType
+            : undefined;
+        return [[locationId, { country, locationType }]];
+      }),
+    );
+  } catch {
+    return {};
+  }
+};
+
 export const resolveLinnworksToken = (
-  env: Partial<Pick<NodeJS.ProcessEnv, 'LINNWORKS_TOKEN' | 'LINNWORKS_AUTH_TOKEN' | 'LINNWORKS_INSTALLATION_ID'>> = process.env,
+  env: Partial<
+    Pick<
+      NodeJS.ProcessEnv,
+      | 'LINNWORKS_INSTALLATION_TOKEN'
+      | 'LINNWORKS_TOKEN'
+      | 'LINNWORKS_AUTH_TOKEN'
+      | 'LINNWORKS_INSTALLATION_ID'
+    >
+  > = process.env,
 ): string =>
-  env.LINNWORKS_TOKEN || env.LINNWORKS_AUTH_TOKEN || env.LINNWORKS_INSTALLATION_ID || '';
+  env.LINNWORKS_INSTALLATION_TOKEN ||
+  env.LINNWORKS_TOKEN ||
+  env.LINNWORKS_AUTH_TOKEN ||
+  env.LINNWORKS_INSTALLATION_ID ||
+  '';
 
 const config: AppConfig = {
   jwt_access_secret:
@@ -65,7 +108,10 @@ const config: AppConfig = {
   google_client_id: process.env.GOOGLE_CLIENT_ID || '',
   google_client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
   google_redirect_uri: process.env.GOOGLE_REDIRECT_URI || '',
-  cors_origins: parseCsv(process.env.CORS_ORIGINS || 'http://localhost:5173,https://dandu-frontend.vercel.app'),
+  cors_origins: parseCsv(
+    process.env.CORS_ORIGINS ||
+      'http://localhost:5173,https://dandu-frontend.vercel.app',
+  ),
   linnworks_application_id: process.env.LINNWORKS_APPLICATION_ID || '',
   linnworks_application_secret: process.env.LINNWORKS_APPLICATION_SECRET || '',
   linnworks_token: resolveLinnworksToken(),
@@ -94,7 +140,10 @@ const config: AppConfig = {
     process.env.LINNWORKS_ORDER_ITEMS_BATCH_SIZE || '50',
     10,
   ),
-  linnworks_timeout_ms: parseInt(process.env.LINNWORKS_TIMEOUT_MS || '30000', 10),
+  linnworks_timeout_ms: parseInt(
+    process.env.LINNWORKS_TIMEOUT_MS || '30000',
+    10,
+  ),
   linnworks_retry_attempts: parseInt(
     process.env.LINNWORKS_RETRY_ATTEMPTS || '3',
     10,
@@ -107,7 +156,11 @@ const config: AppConfig = {
     process.env.LINNWORKS_RATE_LIMIT_PER_MINUTE || '145',
     10,
   ),
-  linnworks_daily_sync_cron: process.env.LINNWORKS_DAILY_SYNC_CRON || '0 3 * * *',
+  linnworks_daily_sync_cron:
+    process.env.LINNWORKS_DAILY_SYNC_CRON || '0 3 * * *',
+  linnworks_location_map: parseLinnworksLocationMap(
+    process.env.LINNWORKS_LOCATION_MAP,
+  ),
 };
 
 export default config;

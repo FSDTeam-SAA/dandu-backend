@@ -7,10 +7,14 @@ model Product {
     sku          String        @unique
     title        String        @db.Text
     brand        String?
+    category     String?
     status       ProductStatus @default(ACTIVE)
     cost         Decimal?      @db.Decimal(10, 2)
     currency     String        @default("USD")
     weight       Decimal?      @db.Decimal(10, 3)
+    material     String?
+    thickness    String?
+    packQty      Int?
     length       Decimal?      @db.Decimal(10, 3)
     width        Decimal?      @db.Decimal(10, 3)
     height       Decimal?      @db.Decimal(10, 3)
@@ -32,7 +36,8 @@ model Product {
 model ProductStock {
     id           String            @id @default(uuid()) @db.VarChar(36)
     productId    String            @db.VarChar(36)
-    country      String
+    sourceLocationId String?
+    country      String?
     locationType StockLocationType @default(FBA)
     warehouse    String?
     quantity     Int               @default(0)
@@ -44,6 +49,7 @@ model ProductStock {
     product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
     @@unique([productId, country, locationType, warehouse])
+    @@unique([productId, sourceLocationId])
     @@index([country])
     @@index([locationType])
 }
@@ -55,6 +61,12 @@ model ProductChannel {
     country   String?
     asin      String?
     listingId String?
+    source    String?
+    subSource String?
+    sourceRowId String?
+    externalReferenceId String?
+    ignoreSync Boolean @default(false)
+    syncKey   String?
     price     Decimal?         @db.Decimal(10, 2)
     currency  String           @default("USD")
     isActive  Boolean          @default(true)
@@ -64,6 +76,7 @@ model ProductChannel {
     salesMetrics ProductSalesMetric[]
 
     @@unique([productId, channel, country, asin, listingId])
+    @@unique([productId, syncKey])
     @@index([channel])
     @@index([asin])
     @@index([listingId])
@@ -75,6 +88,10 @@ model ProductSalesMetric {
     productChannelId String?          @db.VarChar(36)
     channel          SalesChannelType
     country          String?
+    fulfillmentType  SalesFulfillmentType @default(UNKNOWN)
+    source           String?
+    subSource        String?
+    syncKey          String?
     periodStart      DateTime
     periodEnd        DateTime
     unitsSold        Int              @default(0)
@@ -90,6 +107,7 @@ model ProductSalesMetric {
     @@index([productId, periodStart, periodEnd])
     @@index([channel])
     @@index([country])
+    @@unique([productId, syncKey])
 }
 
 model SkuImportBatch {

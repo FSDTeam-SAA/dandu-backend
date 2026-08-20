@@ -1,23 +1,20 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import {
-  SKU_REPOSITORY_TOKEN,
+import { EntityNotFoundException } from '../../../common/domain/exceptions/domain.exception';
+import type {
+  ISkuRepository,
+  UpsertProductInput,
 } from '../ports/outbound/sku-repository.port';
-import type { ISkuRepository } from '../ports/outbound/sku-repository.port';
-import { UpdateProductDto } from '../dto/update-product.dto';
 
-@Injectable()
+export type ManualProductUpdate = Pick<
+  UpsertProductInput,
+  'material' | 'thickness' | 'packQty'
+>;
+
 export class UpdateProductService {
-  constructor(
-    @Inject(SKU_REPOSITORY_TOKEN)
-    private readonly skuRepository: ISkuRepository,
-  ) {}
+  constructor(private readonly skuRepository: ISkuRepository) {}
 
-  async execute(sku: string, dto: UpdateProductDto): Promise<void> {
+  async execute(sku: string, data: ManualProductUpdate): Promise<void> {
     const existing = await this.skuRepository.findMetricsBySku(sku);
-    if (!existing) {
-      throw new NotFoundException(`Product with SKU ${sku} not found`);
-    }
-
-    await this.skuRepository.updateProduct(sku, dto);
+    if (!existing) throw new EntityNotFoundException('Product', sku);
+    await this.skuRepository.updateProduct(sku, data);
   }
 }

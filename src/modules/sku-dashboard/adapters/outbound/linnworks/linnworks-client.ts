@@ -3,10 +3,9 @@ import { APP_CONFIG_TOKEN } from '../../../../../common/domain/interfaces/app-co
 import type { IAppConfig } from '../../../../../common/domain/interfaces/app-config.interface';
 import {
   ILinnworksClient,
-  LinnworksChannelSku,
-  LinnworksOrderItem,
-  LinnworksPagedOrders,
+  LinnworksChannelSkuBatch,
   LinnworksStockItem,
+  LinnworksV2OrdersPage,
 } from '../../../ports/outbound/linnworks-client.port';
 
 interface AuthSession {
@@ -62,10 +61,10 @@ export class LinnworksClient implements ILinnworksClient {
 
   async getChannelSkus(
     inventoryItemIds: string[],
-  ): Promise<LinnworksChannelSku[]> {
+  ): Promise<LinnworksChannelSkuBatch[]> {
     if (inventoryItemIds.length === 0) return [];
 
-    return this.request<LinnworksChannelSku[]>(
+    return this.request<LinnworksChannelSkuBatch[]>(
       '/api/Inventory/BatchGetInventoryItemChannelSKUs',
       {
         inventoryItemIds,
@@ -73,48 +72,23 @@ export class LinnworksClient implements ILinnworksClient {
     );
   }
 
-  async searchProcessedOrdersPaged(input: {
+  async getProcessedOrders(input: {
     from: Date;
     to: Date;
-    pageNum: number;
-  }): Promise<LinnworksPagedOrders> {
-    return this.request<LinnworksPagedOrders>(
-      '/api/ProcessedOrders/SearchProcessedOrdersPaged',
-      {
-        from: input.from.toISOString(),
-        to: input.to.toISOString(),
-        dateType: 'PROCESSED',
-        searchField: '',
-        exactMatch: false,
-        searchTerm: '',
-        pageNum: input.pageNum,
-        numEntriesPerPage: Math.min(
-          this.config.linnworks_orders_page_size,
-          200,
-        ),
-      },
-      {
-        emptyValue: {
-          PageNumber: input.pageNum,
-          EntriesPerPage: Math.min(this.config.linnworks_orders_page_size, 200),
-          TotalEntries: 0,
-          TotalPages: 0,
-          Data: [],
-        },
-      },
-    );
-  }
+    nextSearchToken?: string | null;
+  }): Promise<LinnworksV2OrdersPage> {
+    const params = new URLSearchParams({
+      fromDate: input.from.toISOString(),
+      toDate: input.to.toISOString(),
+      includeProcessed: 'true',
+      entriesPerPage: String(
+        Math.min(this.config.linnworks_orders_page_size, 200),
+      ),
+    });
+    if (input.nextSearchToken) params.set('searchToken', input.nextSearchToken);
 
-  async getOrderItemsByOrderIds(
-    orderIds: string[],
-  ): Promise<LinnworksOrderItem[]> {
-    if (orderIds.length === 0) return [];
-
-    return this.request<LinnworksOrderItem[]>(
-      '/api/ProcessedOrders/GetOrderItemsByOrderIds',
-      {
-        orderIds,
-      },
+    return this.requestV2<LinnworksV2OrdersPage>(
+      `/v2/orders?${params.toString()}`,
     );
   }
 
@@ -177,6 +151,57 @@ export class LinnworksClient implements ILinnworksClient {
     }
 
     throw new Error('Linnworks request failed');
+  }
+
+  private async requestV2<T>(path: string): Promise<T> {
+    let session = await this.authorize();
+    let url = `${this.toV2Server(session.server)}${path}`;
+    let refreshedAfterUnauthorized = false;
+
+    for (
+      let attempt = 0;
+      attempt <= this.config.linnworks_retry_attempts;
+      attempt += 1
+    ) {
+      await this.waitForRateLimitSlot();
+
+      try {
+        const response = await this.fetchGet(url, {
+          Authorization: session.token,
+        });
+        if (response.ok) return (await response.json()) as T;
+
+        if (
+          [401, 403].includes(response.status) &&
+          !refreshedAfterUnauthorized
+        ) {
+          this.session = null;
+          session = await this.authorize();
+          url = `${this.toV2Server(session.server)}${path}`;
+          refreshedAfterUnauthorized = true;
+          attempt -= 1;
+          continue;
+        }
+
+        const text = await this.readResponseText(response);
+        if (![429, 500, 502, 503, 504].includes(response.status)) {
+          throw new Error(
+            `Linnworks v2 request failed: ${response.status} - ${text}`,
+          );
+        }
+        if (attempt === this.config.linnworks_retry_attempts) {
+          throw new Error(
+            `Linnworks v2 request failed after retries: ${response.status} - ${text}`,
+          );
+        }
+      } catch (error) {
+        if (attempt === this.config.linnworks_retry_attempts) throw error;
+      }
+
+      await sleep(this.config.linnworks_retry_base_delay_ms * 2 ** attempt);
+    }
+
+    throw new Error('Linnworks v2 request failed');
   }
 
   private async authorize(): Promise<AuthSession> {
@@ -257,6 +282,33 @@ export class LinnworksClient implements ILinnworksClient {
     } finally {
       clearTimeout(timeout);
     }
+  }
+
+  private async fetchGet(
+    url: string,
+    headers: Record<string, string> = {},
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      this.config.linnworks_timeout_ms,
+    );
+
+    try {
+      return await fetch(url, {
+        method: 'GET',
+        headers: { accept: 'application/json', ...headers },
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private toV2Server(server: string): string {
+    const url = new URL(server);
+    url.hostname = url.hostname.replace(/-ext\./, '-api.');
+    return url.toString().replace(/\/$/, '');
   }
 
   private async readResponseText(response: Response): Promise<string> {

@@ -79,4 +79,8 @@ export class AppConfigService implements IAppConfig {
   get linnworks_daily_sync_cron(): string {
     return config.linnworks_daily_sync_cron;
   }
+
+  get linnworks_location_map() {
+    return config.linnworks_location_map;
+  }
 }

@@ -1,5 +1,6 @@
 import {
   ProductStatus,
+  SalesFulfillmentType,
   SalesChannelType,
   SkuMetricsDomainModel,
   StockLocationType,
@@ -43,6 +44,7 @@ export interface UpsertProductInput {
   sku: string;
   title: string;
   brand?: string | null;
+  category?: string | null;
   status?: ProductStatus;
   cost?: number | null;
   currency?: string;
@@ -50,6 +52,9 @@ export interface UpsertProductInput {
   length?: number | null;
   width?: number | null;
   height?: number | null;
+  material?: string | null;
+  thickness?: string | null;
+  packQty?: number | null;
   imageUrl?: string | null;
   productUrl?: string | null;
   lastSyncedAt?: Date;
@@ -57,7 +62,8 @@ export interface UpsertProductInput {
 
 export interface UpsertStockInput {
   sku: string;
-  country: string;
+  sourceLocationId: string;
+  country: string | null;
   locationType: StockLocationType;
   warehouse?: string | null;
   quantity: number;
@@ -72,6 +78,12 @@ export interface UpsertChannelInput {
   country?: string | null;
   asin?: string | null;
   listingId?: string | null;
+  source?: string | null;
+  subSource?: string | null;
+  sourceRowId?: string | null;
+  externalReferenceId?: string | null;
+  ignoreSync?: boolean;
+  syncKey: string;
   price?: number | null;
   currency?: string;
   isActive?: boolean;
@@ -81,6 +93,10 @@ export interface UpsertSalesMetricInput {
   sku: string;
   channel: SalesChannelType;
   country?: string | null;
+  fulfillmentType: SalesFulfillmentType;
+  source?: string | null;
+  subSource?: string | null;
+  syncKey: string;
   periodStart: Date;
   periodEnd: Date;
   unitsSold: number;
@@ -103,12 +119,18 @@ export interface ISkuRepository {
   getDashboardMetrics(periodDays: number): Promise<DashboardMetricsResult>;
   getInventoryAlerts(): Promise<InventoryAlertResult[]>;
   upsertProducts(products: UpsertProductInput[]): Promise<number>;
-  upsertStock(stock: UpsertStockInput[]): Promise<number>;
-  upsertChannels(channels: UpsertChannelInput[]): Promise<number>;
+  upsertStock(stock: UpsertStockInput[], syncedSkus: string[]): Promise<number>;
+  upsertChannels(
+    channels: UpsertChannelInput[],
+    syncedSkus: string[],
+  ): Promise<number>;
   replaceSalesMetrics(metrics: UpsertSalesMetricInput[]): Promise<number>;
   createSyncLog(input: SyncLogInput): Promise<string>;
   updateSyncLog(id: string, input: SyncLogInput): Promise<void>;
-  updateProduct(sku: string, data: Partial<UpsertProductInput>): Promise<void>;
+  updateProduct(
+    sku: string,
+    data: Pick<UpsertProductInput, 'material' | 'thickness' | 'packQty'>,
+  ): Promise<void>;
 }
 
 export const SKU_REPOSITORY_TOKEN = Symbol('ISkuRepository');

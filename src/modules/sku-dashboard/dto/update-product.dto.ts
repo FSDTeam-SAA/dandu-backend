@@ -1,40 +1,24 @@
-import { IsNumber, IsOptional, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
 export class UpdateProductDto {
-  @ApiPropertyOptional({ description: 'Product cost' })
+  @ApiPropertyOptional({ description: 'Manual material annotation' })
   @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Type(() => Number)
-  cost?: number;
+  @IsString()
+  @MaxLength(191)
+  material?: string | null;
 
-  @ApiPropertyOptional({ description: 'Product weight in oz/lbs' })
+  @ApiPropertyOptional({ description: 'Manual thickness annotation' })
   @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Type(() => Number)
-  weight?: number;
+  @IsString()
+  @MaxLength(191)
+  thickness?: string | null;
 
-  @ApiPropertyOptional({ description: 'Product length in inches' })
+  @ApiPropertyOptional({ description: 'Manual pack quantity' })
   @IsOptional()
-  @IsNumber()
+  @IsInt()
   @Min(0)
   @Type(() => Number)
-  length?: number;
-
-  @ApiPropertyOptional({ description: 'Product width in inches' })
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Type(() => Number)
-  width?: number;
-
-  @ApiPropertyOptional({ description: 'Product height in inches' })
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Type(() => Number)
-  height?: number;
+  packQty?: number | null;
 }
